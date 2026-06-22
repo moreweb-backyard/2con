@@ -892,5 +892,123 @@ async fn main() -> Result<(), slint::PlatformError> {
         }
     });
 
+    // 9. Icon Suite Handlers
+    let profiles_export = profiles.clone();
+    ui.on_export_proxy(move |id| {
+        let id_str = id.to_string();
+        let p_guard = profiles_export.lock().unwrap();
+        if let Some(p) = p_guard.iter().find(|x| x.id == id_str) {
+            if let Ok(mut clipboard) = arboard::Clipboard::new() {
+                let _ = clipboard.set_text(p.raw_link.clone());
+            }
+        }
+    });
+
+    let profiles_dup = profiles.clone();
+    let proxy_model_dup = proxy_model.clone();
+    ui.on_duplicate_proxy(move |id| {
+        let id_str = id.to_string();
+        let mut p_guard = profiles_dup.lock().unwrap();
+        if let Some(p) = p_guard.iter().find(|x| x.id == id_str).cloned() {
+            let mut new_p = p.clone();
+            new_p.id = uuid::Uuid::new_v4().to_string();
+            new_p.name = format!("{} (Copy)", p.name);
+            p_guard.push(new_p.clone());
+            config::save_profiles(&p_guard);
+            
+            proxy_model_dup.push(ProxyItem {
+                id: new_p.id.into(),
+                name: new_p.name.into(),
+                protocol: new_p.protocol.into(),
+                is_active: false,
+                latency: "-".into(),
+                latency_color: slint::Color::from_rgb_u8(136, 136, 136),
+            });
+        }
+    });
+
+    let profiles_qr = profiles.clone();
+    let ui_qr = ui.as_weak();
+    ui.on_show_qr_for_proxy(move |id| {
+        let id_str = id.to_string();
+        let p_guard = profiles_qr.lock().unwrap();
+        if let Some(p) = p_guard.iter().find(|x| x.id == id_str) {
+            use qrcode_generator::QrCodeEcc;
+            if let Ok(svg) = qrcode_generator::to_svg_to_string(&p.raw_link, QrCodeEcc::Low, 200, None::<&str>) {
+                if let Ok(img) = slint::Image::load_from_svg_data(svg.as_bytes()) {
+                    if let Some(u) = ui_qr.upgrade() {
+                        u.set_qr_image_data(img);
+                        u.set_show_qr_modal(true);
+                    }
+                }
+            }
+        }
+    });
+
+    let ui_close_qr = ui.as_weak();
+    ui.on_close_qr_modal(move || {
+        if let Some(u) = ui_close_qr.upgrade() {
+            u.set_show_qr_modal(false);
+        }
+    });
+
+    let profiles_edit = profiles.clone();
+    let ui_edit = ui.as_weak();
+    ui.on_open_edit_proxy(move |id| {
+        let id_str = id.to_string();
+        let p_guard = profiles_edit.lock().unwrap();
+        if let Some(p) = p_guard.iter().find(|x| x.id == id_str) {
+            if let Some(u) = ui_edit.upgrade() {
+                u.set_edit_proxy_id(p.id.clone().into());
+                u.set_edit_proxy_name(p.name.clone().into());
+                u.set_edit_proxy_link(p.raw_link.clone().into());
+                u.set_show_edit_modal(true);
+            }
+        }
+    });
+
+    let ui_close_edit = ui.as_weak();
+    ui.on_close_edit_modal(move || {
+        if let Some(u) = ui_close_edit.upgrade() {
+            u.set_show_edit_modal(false);
+        }
+    });
+
+    let profiles_save = profiles.clone();
+    let proxy_model_save = proxy_model.clone();
+    let ui_save = ui.as_weak();
+    ui.on_save_edit_proxy(move || {
+        if let Some(u) = ui_save.upgrade() {
+            let id = u.get_edit_proxy_id().to_string();
+            let new_name = u.get_edit_proxy_name().to_string();
+            let new_link = u.get_edit_proxy_link().to_string();
+            
+            let mut p_guard = profiles_save.lock().unwrap();
+            if let Some(p) = p_guard.iter_mut().find(|x| x.id == id) {
+                p.name = new_name.clone();
+                p.raw_link = new_link.clone();
+                if let Some(parsed) = config::ProxyConfig::parse(&new_link) {
+                    p.protocol = parsed.protocol.clone();
+                }
+            }
+            config::save_profiles(&p_guard);
+            
+            for i in 0..proxy_model_save.row_count() {
+                if let Some(mut item) = proxy_model_save.row_data(i) {
+                    if item.id == id {
+                        item.name = new_name.clone().into();
+                        if let Some(parsed) = config::ProxyConfig::parse(&new_link) {
+                            item.protocol = parsed.protocol.into();
+                        }
+                        proxy_model_save.set_row_data(i, item);
+                        break;
+                    }
+                }
+            }
+            
+            u.set_show_edit_modal(false);
+        }
+    });
+
     ui.run()
 }
