@@ -1,4 +1,5 @@
 use serde_json::{json, Value};
+use crate::config::AppSettings;
 use std::process::Stdio;
 use tokio::process::{Child, Command};
 use std::path::Path;
@@ -45,14 +46,81 @@ impl ProxyRunner {
     }
 }
 
-pub fn generate_xray_config(address: &str, port: u16, uuid: &str, sni: &str, host: &str, path: &str) -> Value {
+pub fn generate_xray_config(protocol: &str, address: &str, port: u16, uuid: &str, sni: &str, host: &str, path: &str, app_settings: &AppSettings) -> Value {
+    let settings = if protocol == "trojan" {
+        json!({
+            "servers": [
+                {
+                    "address": address,
+                    "port": port,
+                    "password": uuid
+                }
+            ]
+        })
+    } else {
+        json!({
+            "vnext": [
+                {
+                    "address": address,
+                    "port": port,
+                    "users": [
+                        {
+                            "id": uuid,
+                            "encryption": "none",
+                            "flow": ""
+                        }
+                    ]
+                }
+            ]
+        })
+    };
+
+    let stream_settings = if path.is_empty() {
+        json!({
+            "network": "tcp",
+            "security": "tls",
+            "tlsSettings": {
+                "serverName": sni,
+                "allowInsecure": false
+            }
+        })
+    } else {
+        json!({
+            "network": "ws",
+            "security": "tls",
+            "tlsSettings": {
+                "serverName": sni,
+                "allowInsecure": false
+            },
+            "wsSettings": {
+                "path": path,
+                "headers": {
+                    "Host": host
+                }
+            }
+        })
+    };
+
+    let mut outbound = json!({
+        "protocol": protocol,
+        "settings": settings,
+        "streamSettings": stream_settings
+    });
+
+    if app_settings.mux_enabled {
+        outbound.as_object_mut().unwrap().insert("mux".to_string(), json!({
+            "enabled": true,
+            "concurrency": 8
+        }));
+    }
+
     json!({
         "log": {
-            "loglevel": "warning"
+            "loglevel": app_settings.log_level
         },
         "inbounds": [
             {
-                "port": 10808,
+                "port": app_settings.socks_port,
                 "listen": "127.0.0.1",
                 "protocol": "socks",
                 "settings": {
@@ -60,44 +128,13 @@ pub fn generate_xray_config(address: &str, port: u16, uuid: &str, sni: &str, hos
                 }
             },
             {
-                "port": 10809,
+                "port": app_settings.socks_port + 1,
                 "listen": "127.0.0.1",
                 "protocol": "http"
             }
         ],
         "outbounds": [
-            {
-                "protocol": "vless",
-                "settings": {
-                    "vnext": [
-                        {
-                            "address": address,
-                            "port": port,
-                            "users": [
-                                {
-                                    "id": uuid,
-                                    "encryption": "none",
-                                    "flow": ""
-                                }
-                            ]
-                        }
-                    ]
-                },
-                "streamSettings": {
-                    "network": "ws",
-                    "security": "tls",
-                    "tlsSettings": {
-                        "serverName": sni,
-                        "allowInsecure": false
-                    },
-                    "wsSettings": {
-                        "path": path,
-                        "headers": {
-                            "Host": host
-                        }
-                    }
-                }
-            }
+            outbound
         ]
     })
 }

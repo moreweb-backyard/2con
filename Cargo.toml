@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-slint = "1.9"
+slint = { version = "1.9", features = ["backend-winit"] }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -13,6 +13,10 @@ rustls = "0.23"
 base64 = "0.22"
 url = "2.5"
 rand = "0.8"
+winit = "0.29"
+uuid = { version = "1.10", features = ["v4"] }
+i-slint-backend-winit = "1.9"
+chrono = "0.4.45"
 
 [build-dependencies]
 slint-build = "1.9"

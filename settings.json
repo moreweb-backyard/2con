@@ -1,0 +1,6 @@
+{
+  "socks_port": 10808,
+  "mux_enabled": false,
+  "log_level": "warning",
+  "docking": "Top Left"
+}
