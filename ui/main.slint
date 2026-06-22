@@ -182,6 +182,22 @@ export component MainWindow inherits Window {
     callback ping_proxy(string);
     callback update_single_subscription(string);
     
+    // Icon Suite Callbacks
+    callback export_proxy(string);
+    callback duplicate_proxy(string);
+    
+    in-out property <bool> show_qr_modal: false;
+    in-out property <image> qr_image_data;
+    callback show_qr_for_proxy(string);
+    callback close_qr_modal();
+    
+    in-out property <bool> show_edit_modal: false;
+    in-out property <string> edit_proxy_id: "";
+    in-out property <string> edit_proxy_name: "";
+    in-out property <string> edit_proxy_link: "";
+    callback open_edit_proxy(string);
+    callback close_edit_modal();
+    callback save_edit_proxy();
     // Properties
     in-out property <bool> connected: false;
     in-out property <string> current_ip: "N/A";
@@ -312,12 +328,11 @@ export component MainWindow inherits Window {
                 visible: self.opacity > 0;
                 animate opacity { duration: 200ms; easing: ease-in-out; }
                 
-                VerticalBox {
-                alignment: space-around;
-                padding: 20px;
-                
                 // IP / Status text
                 VerticalBox {
+                    x: 0px;
+                    y: 40px;
+                    width: 340px;
                     spacing: 4px;
                     Text { 
                         text: root.is_scanning ? "Scanning Cloudflare..." : (root.connected ? "Connected" : "Disconnected"); 
@@ -329,75 +344,80 @@ export component MainWindow inherits Window {
                     Text { text: "Latency: " + root.latency; color: #777777; font-size: 12px; horizontal-alignment: center; }
                 }
                 
-                // Dashboard Center (3 Columns)
-                HorizontalBox {
-                    alignment: space-around;
+                // Center Column: Power
+                Rectangle {
+                    x: (340px - 140px) / 2;
+                    y: 110px;
+                    width: 140px;
+                    height: 140px;
+                    border-radius: 70px;
+                    background: root.connected ? #00e5ff : #120024;
                     
-                    // Left Column: Speeds
-                    VerticalBox {
-                        alignment: center;
-                        spacing: 12px;
-                        
-                        HorizontalBox {
-                            spacing: 6px;
-                            Image { source: @image-url("upload.svg"); colorize: #00e5ff; width: 14px; height: 14px; y: 1px; }
-                            Text { text: root.upload_speed; color: white; font-size: 12px; font-weight: 600; }
-                        }
-                        HorizontalBox {
-                            spacing: 6px;
-                            Image { source: @image-url("download.svg"); colorize: #bf00ff; width: 14px; height: 14px; y: 1px; }
-                            Text { text: root.download_speed; color: white; font-size: 12px; font-weight: 600; }
-                        }
-                        HorizontalBox {
-                            spacing: 6px;
-                            Image { source: @image-url("data.svg"); colorize: #ff007f; width: 14px; height: 14px; y: 1px; }
-                            Text { text: root.total_data; color: white; font-size: 12px; font-weight: 600; }
-                        }
+                    drop-shadow-color: root.connected ? #00e5ff88 : transparent;
+                    drop-shadow-blur: 20px;
+                    animate background, drop-shadow-color { duration: 300ms; }
+                    
+                    Image {
+                        source: @image-url("power.svg");
+                        colorize: root.connected ? #1c1c1e : #888888;
+                        width: 60px;
+                        height: 60px;
+                        x: (parent.width - self.width) / 2;
+                        y: (parent.height - self.height) / 2;
                     }
                     
-                    // Center Column: Power
-                    Rectangle {
-                        width: 110px;
-                        height: 110px;
-                        border-radius: 55px;
-                        background: root.connected ? #00e5ff : #120024;
-                        
-                        drop-shadow-color: root.connected ? #00e5ff88 : transparent;
-                        drop-shadow-blur: 20px;
-                        animate background, drop-shadow-color { duration: 300ms; }
-                        
-                        Image {
-                            source: @image-url("power.svg");
-                            colorize: root.connected ? #1c1c1e : #888888;
-                            width: 48px;
-                            height: 48px;
-                            x: (parent.width - self.width) / 2;
-                            y: (parent.height - self.height) / 2;
-                        }
-                        
-                        TouchArea { 
-                            width: 100%;
-                            height: 100%;
-                            clicked => { root.toggle_connect(); } 
-                        }
+                    TouchArea { 
+                        width: 100%;
+                        height: 100%;
+                        clicked => { root.toggle_connect(); } 
                     }
+                }
+                
+                // Left Column: Speeds
+                VerticalBox {
+                    x: 20px;
+                    y: 280px;
+                    alignment: start;
+                    spacing: 12px;
                     
-                    // Right Column: IP Info
-                    VerticalBox {
-                        alignment: center;
-                        spacing: 8px;
-                        
-                        HorizontalBox {
-                            spacing: 6px;
-                            Image { source: @image-url("flag.svg"); colorize: #bf00ff; width: 14px; height: 14px; y: 1px; }
-                            Text { text: root.ip_country; color: #bf00ff; font-size: 12px; font-weight: 700; }
-                        }
-                        Text { text: root.current_ip; color: white; font-size: 11px; font-weight: 600; }
+                    HorizontalBox {
+                        spacing: 6px;
+                        Image { source: @image-url("upload.svg"); colorize: #00e5ff; width: 14px; height: 14px; y: 1px; }
+                        Text { text: root.upload_speed; color: white; font-size: 12px; font-weight: 600; }
                     }
+                    HorizontalBox {
+                        spacing: 6px;
+                        Image { source: @image-url("download.svg"); colorize: #bf00ff; width: 14px; height: 14px; y: 1px; }
+                        Text { text: root.download_speed; color: white; font-size: 12px; font-weight: 600; }
+                    }
+                    HorizontalBox {
+                        spacing: 6px;
+                        Image { source: @image-url("data.svg"); colorize: #ff007f; width: 14px; height: 14px; y: 1px; }
+                        Text { text: root.total_data; color: white; font-size: 12px; font-weight: 600; }
+                    }
+                }
+                
+                // Right Column: IP Info
+                VerticalBox {
+                    x: 340px - self.width - 20px;
+                    y: 290px;
+                    alignment: start;
+                    spacing: 8px;
+                    
+                    HorizontalBox {
+                        alignment: end;
+                        spacing: 6px;
+                        Image { source: @image-url("flag.svg"); colorize: #bf00ff; width: 14px; height: 14px; y: 1px; }
+                        Text { text: root.ip_country; color: #bf00ff; font-size: 12px; font-weight: 700; }
+                    }
+                    Text { text: root.current_ip; color: white; font-size: 11px; font-weight: 600; horizontal-alignment: right; }
                 }
                 
                 // Location Bar
                 Rectangle {
+                    x: 20px;
+                    y: 360px;
+                    width: 300px;
                     height: 50px;
                     border-radius: 10px;
                     background: #120024;
@@ -433,7 +453,6 @@ export component MainWindow inherits Window {
                         clicked => { root.active_tab = 2; root.active_settings_tab = 2; } 
                     }
                 }
-            }
             }
             
             // TAB 2: SETTINGS (SPLIT VIEW)
@@ -643,10 +662,10 @@ export component MainWindow inherits Window {
                                                 spacing: 6px;
                                                 alignment: end;
                                                 IconButton { icon: @image-url("signal.svg"); tooltip_text: "Ping Test"; clicked => { root.ping_proxy(item.id); } }
-                                                IconButton { icon: @image-url("edit.svg"); tooltip_text: "Edit Config"; }
-                                                IconButton { icon: @image-url("qr.svg"); tooltip_text: "Share QR"; }
-                                                IconButton { icon: @image-url("copy.svg"); tooltip_text: "Export"; }
-                                                IconButton { icon: @image-url("layers.svg"); tooltip_text: "Duplicate"; }
+                                                IconButton { icon: @image-url("edit.svg"); tooltip_text: "Edit Config"; clicked => { root.open_edit_proxy(item.id); } }
+                                                IconButton { icon: @image-url("qr.svg"); tooltip_text: "Share QR"; clicked => { root.show_qr_for_proxy(item.id); } }
+                                                IconButton { icon: @image-url("copy.svg"); tooltip_text: "Export"; clicked => { root.export_proxy(item.id); } }
+                                                IconButton { icon: @image-url("layers.svg"); tooltip_text: "Duplicate"; clicked => { root.duplicate_proxy(item.id); } }
                                                 IconButton { icon: @image-url("trash.svg"); tooltip_text: "Delete"; is_danger: true; clicked => { root.delete_proxy(item.id); } }
                                             }
                                         }

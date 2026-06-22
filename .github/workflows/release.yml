@@ -1,0 +1,68 @@
+name: Release Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_code:
+        description: 'Version Code (e.g., v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+      release_name:
+        description: 'Release Name (e.g., Initial Release)'
+        required: true
+        default: 'Initial Release'
+      tag_name:
+        description: 'Tag Name (e.g., v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+      pre_release:
+        description: 'Pre-release Status'
+        required: true
+        type: boolean
+        default: false
+
+jobs:
+  build-and-release:
+    name: Build and Release for Windows
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Build client_2con
+        run: cargo build --release
+
+      - name: Download Xray-core
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://github.com/XTLS/Xray-core/releases/latest/download/Xray-windows-64.zip" -OutFile "Xray-windows-64.zip"
+          Expand-Archive -Path "Xray-windows-64.zip" -DestinationPath "xray-temp"
+          New-Item -ItemType Directory -Force -Path "bundle"
+          Copy-Item -Path "xray-temp/xray.exe" -Destination "bundle/xray.exe"
+          Copy-Item -Path "xray-temp/geoip.dat" -Destination "bundle/geoip.dat"
+          Copy-Item -Path "xray-temp/geosite.dat" -Destination "bundle/geosite.dat"
+          Copy-Item -Path "target/release/client_2con.exe" -Destination "bundle/client_2con.exe"
+
+      - name: Zip Bundle
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "bundle/*" -DestinationPath "2con-windows-${{ github.event.inputs.version_code }}.zip"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.event.inputs.tag_name }}
+          name: ${{ github.event.inputs.release_name }}
+          prerelease: ${{ github.event.inputs.pre_release }}
+          files: |
+            2con-windows-${{ github.event.inputs.version_code }}.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
