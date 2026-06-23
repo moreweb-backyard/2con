@@ -2,6 +2,7 @@ mod config;
 mod scanner;
 mod proxy;
 mod tester;
+mod sysproxy;
 
 slint::include_modules!();
 
@@ -38,18 +39,92 @@ async fn main() -> Result<(), slint::PlatformError> {
     
     let profiles_guard = profiles.lock().unwrap();
     for p in profiles_guard.iter() {
+        let mut address = String::new();
+        let mut port = String::new();
+        let mut transport = String::new();
+        let mut tls = String::new();
+        
+        if let Some(parsed) = config::ProxyConfig::parse(&p.raw_link) {
+            address = parsed.addresses.first().unwrap_or(&"".to_string()).clone();
+            port = parsed.port.to_string();
+            transport = parsed.transport;
+            tls = parsed.tls;
+        }
+        
         proxy_model.push(ProxyItem {
             id: p.id.clone().into(),
             name: p.name.clone().into(),
-            protocol: p.protocol.clone().into(),
+            protocol: p.protocol.to_uppercase().into(),
+            address: address.into(),
+            port: port.into(),
+            transport: transport.into(),
+            tls: tls.into(),
+            sub_group: p.sub_group.clone().into(),
             is_active: false,
             latency: "Ping...".into(),
             latency_color: slint::Color::from_rgb_u8(136, 136, 136),
         });
     }
+    let mut groups = std::collections::HashSet::new();
+    for p in profiles_guard.iter() {
+        groups.insert(p.sub_group.clone());
+    }
     drop(profiles_guard);
     
+    let mut groups_vec: Vec<String> = groups.into_iter().collect();
+    groups_vec.sort();
+    groups_vec.retain(|g| g != "All");
+    groups_vec.insert(0, "All".to_string());
+    let slint_groups: std::rc::Rc<slint::VecModel<slint::SharedString>> = std::rc::Rc::new(slint::VecModel::from(
+        groups_vec.into_iter().map(|s| s.into()).collect::<Vec<slint::SharedString>>()
+    ));
+    ui.set_subscription_groups(slint::ModelRc::new(slint_groups));
+    
     ui.set_proxy_list(ModelRc::new(proxy_model.clone()));
+
+    let proxy_model_filter = proxy_model.clone();
+    let profiles_filter = profiles.clone();
+    let ui_filter = ui.as_weak();
+    ui.on_filter_changed(move || {
+        if let Some(u) = ui_filter.upgrade() {
+            let filter_group = u.get_filter_group().to_string();
+            let profiles_guard = profiles_filter.lock().unwrap();
+            
+            let mut items = Vec::new();
+            
+            for p in profiles_guard.iter() {
+                if filter_group == "All" || p.sub_group == filter_group {
+                    let mut address = String::new();
+                    let mut port = String::new();
+                    let mut transport = String::new();
+                    let mut tls = String::new();
+                    
+                    if let Some(parsed) = config::ProxyConfig::parse(&p.raw_link) {
+                        address = parsed.addresses.first().unwrap_or(&"".to_string()).clone();
+                        port = parsed.port.to_string();
+                        transport = parsed.transport;
+                        tls = parsed.tls;
+                    }
+                    
+                    items.push(ProxyItem {
+                        id: p.id.clone().into(),
+                        name: p.name.clone().into(),
+                        protocol: p.protocol.to_uppercase().into(),
+                        address: address.into(),
+                        port: port.into(),
+                        transport: transport.into(),
+                        tls: tls.into(),
+                        sub_group: p.sub_group.clone().into(),
+                        is_active: false,
+                        latency: "Ping...".into(),
+                        latency_color: slint::Color::from_rgb_u8(136, 136, 136),
+                    });
+                }
+            }
+            
+            proxy_model_filter.set_vec(items);
+        }
+    });
 
     // 1.1 Subscription List Model
     let subs = Arc::new(StdMutex::new(config::load_subscriptions()));
@@ -214,17 +289,25 @@ async fn main() -> Result<(), slint::PlatformError> {
                 id: id.clone(),
                 name: name.clone(),
                 protocol: parsed.protocol.clone(),
-                raw_link: link_str,
+                raw_link: link_str.clone(),
+                sub_group: "Personal".to_string(),
             };
             
             let mut p_guard = profiles_import.lock().unwrap();
             p_guard.push(profile);
             config::save_profiles(&p_guard);
             
+            let address = parsed.addresses.first().unwrap_or(&"".to_string()).clone();
+            
             proxy_model_import.push(ProxyItem {
                 id: id.into(),
                 name: name.into(),
-                protocol: parsed.protocol.into(),
+                protocol: parsed.protocol.to_uppercase().into(),
+                address: address.into(),
+                port: parsed.port.to_string().into(),
+                transport: parsed.transport.clone().into(),
+                tls: parsed.tls.clone().into(),
+                sub_group: "Personal".into(),
                 is_active: false,
                 latency: "-".into(),
                 latency_color: slint::Color::from_rgb_u8(136, 136, 136),
@@ -330,11 +413,11 @@ async fn main() -> Result<(), slint::PlatformError> {
 
     let subs_update = subs.clone();
     let profiles_update = profiles.clone();
-    let proxy_model_update = proxy_model.clone();
-    let sub_model_update = sub_model.clone();
+    let _proxy_model_update = proxy_model.clone();
+    let _sub_model_update = sub_model.clone();
     let ui_update = ui.as_weak();
     
-    ui.on_update_subscriptions(move || {
+    ui.on_update_subscriptions(move |use_proxy| {
         let ui_weak = ui_update.clone();
         if let Some(u) = ui_weak.upgrade() {
             u.set_is_updating_subs(true);
@@ -352,8 +435,18 @@ async fn main() -> Result<(), slint::PlatformError> {
             let mut new_profiles = Vec::new();
             use base64::Engine;
             
+            let client = if use_proxy {
+                let proxy = reqwest::Proxy::all("socks5h://127.0.0.1:10808").unwrap();
+                reqwest::Client::builder()
+                    .proxy(proxy)
+                    .timeout(std::time::Duration::from_secs(10))
+                    .build().unwrap_or_else(|_| reqwest::Client::new())
+            } else {
+                reqwest::Client::new()
+            };
+            
             for url in urls {
-                if let Ok(resp) = reqwest::get(&url).await {
+                if let Ok(resp) = client.get(&url).send().await {
                     if let Ok(text) = resp.text().await {
                         if let Ok(decoded) = base64::engine::general_purpose::STANDARD.decode(text.trim()) {
                             if let Ok(decoded_str) = String::from_utf8(decoded) {
@@ -374,6 +467,7 @@ async fn main() -> Result<(), slint::PlatformError> {
                                             name: format!("[Sub] {}", name),
                                             protocol: parsed.protocol,
                                             raw_link: line.to_string(),
+                                            sub_group: url.clone(),
                                         });
                                     }
                                 }
@@ -400,17 +494,47 @@ async fn main() -> Result<(), slint::PlatformError> {
                     slint::invoke_from_event_loop(move || {
                         if let Some(u) = ui_weak_clone.upgrade() {
                             let new_model = std::rc::Rc::new(slint::VecModel::default());
-                            for p in profiles_copy {
+                            for p in &profiles_copy {
+                                let mut address = String::new();
+                                let mut port = String::new();
+                                let mut transport = String::new();
+                                let mut tls = String::new();
+                                
+                                if let Some(parsed) = config::ProxyConfig::parse(&p.raw_link) {
+                                    address = parsed.addresses.first().unwrap_or(&"".to_string()).clone();
+                                    port = parsed.port.to_string();
+                                    transport = parsed.transport;
+                                    tls = parsed.tls;
+                                }
+                                
                                 new_model.push(ProxyItem {
-                                    id: p.id.into(),
-                                    name: p.name.into(),
-                                    protocol: p.protocol.into(),
+                                    id: p.id.clone().into(),
+                                    name: p.name.clone().into(),
+                                    protocol: p.protocol.to_uppercase().into(),
+                                    address: address.into(),
+                                    port: port.into(),
+                                    transport: transport.into(),
+                                    tls: tls.into(),
+                                    sub_group: p.sub_group.clone().into(),
                                     is_active: false,
                                     latency: "-".into(),
                                     latency_color: slint::Color::from_rgb_u8(136, 136, 136),
                                 });
                             }
                             u.set_proxy_list(slint::ModelRc::new(new_model));
+                            
+                            let mut groups = std::collections::HashSet::new();
+                            for p in &profiles_copy {
+                                groups.insert(p.sub_group.clone());
+                            }
+                            let mut groups_vec: Vec<String> = groups.into_iter().collect();
+                            groups_vec.sort();
+                            groups_vec.retain(|g| g != "All");
+                            groups_vec.insert(0, "All".to_string());
+                            let slint_groups: std::rc::Rc<slint::VecModel<slint::SharedString>> = std::rc::Rc::new(slint::VecModel::from(
+                                groups_vec.into_iter().map(|s| s.into()).collect::<Vec<slint::SharedString>>()
+                            ));
+                            u.set_subscription_groups(slint::ModelRc::new(slint_groups));
                         }
                     }).unwrap();
                 }
@@ -461,7 +585,7 @@ async fn main() -> Result<(), slint::PlatformError> {
             tokio::spawn(async move {
                 while ap_active.load(Ordering::Relaxed) {
                     tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
-                    if !tester::test_proxy_connection().await {
+                    if tester::real_delay(10808).await.is_none() {
                         let ui_weak_clone = ui_weak.clone();
                         slint::invoke_from_event_loop(move || {
                             if let Some(u) = ui_weak_clone.upgrade() {
@@ -495,6 +619,7 @@ async fn main() -> Result<(), slint::PlatformError> {
             tokio::spawn(async move {
                 let mut runner = runner_clone.lock().await;
                 runner.stop().await;
+                let _ = crate::sysproxy::disable_system_proxy();
             });
         } else {
             let active_id = active_id_connect.lock().unwrap().clone();
@@ -579,6 +704,8 @@ async fn main() -> Result<(), slint::PlatformError> {
                             }).unwrap();
                             return;
                         }
+                        
+                        let _ = crate::sysproxy::enable_system_proxy(settings_copy.socks_port + 1);
                         
                         let latency_str = if best_latency.as_millis() < 999000 {
                             format!("{}ms", best_latency.as_millis())
@@ -764,6 +891,7 @@ async fn main() -> Result<(), slint::PlatformError> {
                                             name: format!("[Sub] {}", name),
                                             protocol: parsed.protocol,
                                             raw_link: line.to_string(),
+                                            sub_group: url.clone(),
                                         });
                                     }
                                 }
@@ -789,17 +917,47 @@ async fn main() -> Result<(), slint::PlatformError> {
                         slint::invoke_from_event_loop(move || {
                             if let Some(u) = ui_weak_clone.upgrade() {
                                 let new_model = std::rc::Rc::new(slint::VecModel::default());
-                                for p in profiles_copy {
+                                for p in &profiles_copy {
+                                    let mut address = String::new();
+                                    let mut port = String::new();
+                                    let mut transport = String::new();
+                                    let mut tls = String::new();
+                                    
+                                    if let Some(parsed) = config::ProxyConfig::parse(&p.raw_link) {
+                                        address = parsed.addresses.first().unwrap_or(&"".to_string()).clone();
+                                        port = parsed.port.to_string();
+                                        transport = parsed.transport;
+                                        tls = parsed.tls;
+                                    }
+                                    
                                     new_model.push(ProxyItem {
-                                        id: p.id.into(),
-                                        name: p.name.into(),
-                                        protocol: p.protocol.into(),
+                                        id: p.id.clone().into(),
+                                        name: p.name.clone().into(),
+                                        protocol: p.protocol.to_uppercase().into(),
+                                        address: address.into(),
+                                        port: port.into(),
+                                        transport: transport.into(),
+                                        tls: tls.into(),
+                                        sub_group: p.sub_group.clone().into(),
                                         is_active: false,
                                         latency: "-".into(),
                                         latency_color: slint::Color::from_rgb_u8(136, 136, 136),
                                     });
                                 }
                                 u.set_proxy_list(slint::ModelRc::new(new_model));
+                                
+                                let mut groups = std::collections::HashSet::new();
+                                for p in &profiles_copy {
+                                    groups.insert(p.sub_group.clone());
+                                }
+                                let mut groups_vec: Vec<String> = groups.into_iter().collect();
+                                groups_vec.sort();
+                                groups_vec.retain(|g| g != "All");
+                                groups_vec.insert(0, "All".to_string());
+                                let slint_groups: std::rc::Rc<slint::VecModel<slint::SharedString>> = std::rc::Rc::new(slint::VecModel::from(
+                                    groups_vec.into_iter().map(|s| s.into()).collect::<Vec<slint::SharedString>>()
+                                ));
+                                u.set_subscription_groups(slint::ModelRc::new(slint_groups));
                             }
                         }).unwrap();
                     }
@@ -916,10 +1074,27 @@ async fn main() -> Result<(), slint::PlatformError> {
             p_guard.push(new_p.clone());
             config::save_profiles(&p_guard);
             
+            let mut address = String::new();
+            let mut port = String::new();
+            let mut transport = String::new();
+            let mut tls = String::new();
+            
+            if let Some(parsed) = config::ProxyConfig::parse(&new_p.raw_link) {
+                address = parsed.addresses.first().unwrap_or(&"".to_string()).clone();
+                port = parsed.port.to_string();
+                transport = parsed.transport;
+                tls = parsed.tls;
+            }
+            
             proxy_model_dup.push(ProxyItem {
                 id: new_p.id.into(),
                 name: new_p.name.into(),
-                protocol: new_p.protocol.into(),
+                protocol: new_p.protocol.to_uppercase().into(),
+                address: address.into(),
+                port: port.into(),
+                transport: transport.into(),
+                tls: tls.into(),
+                sub_group: new_p.sub_group.clone().into(),
                 is_active: false,
                 latency: "-".into(),
                 latency_color: slint::Color::from_rgb_u8(136, 136, 136),

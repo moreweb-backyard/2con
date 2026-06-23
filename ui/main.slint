@@ -4,6 +4,11 @@ export struct ProxyItem {
     id: string,
     name: string,
     protocol: string,
+    address: string,
+    port: string,
+    transport: string,
+    tls: string,
+    sub_group: string,
     is_active: bool,
     latency: string,
     latency_color: color,
@@ -19,6 +24,8 @@ component PremiumButton inherits Rectangle {
     in property <string> text;
     in property <bool> is_primary: true;
     in property <bool> is_danger: false;
+    in property <bool> has_icon: false;
+    in property <image> icon;
     callback clicked();
 
     height: 48px;
@@ -30,13 +37,24 @@ component PremiumButton inherits Rectangle {
     
     animate background, drop-shadow-blur { duration: 150ms; }
     
-    Text {
-        text: root.text;
-        color: white;
-        font-size: 16px;
-        font-weight: 600;
-        horizontal-alignment: center;
-        vertical-alignment: center;
+    HorizontalBox {
+        alignment: center;
+        spacing: 8px;
+        if root.has_icon: Image {
+            source: root.icon;
+            width: 16px;
+            height: 16px;
+            colorize: white;
+            // image-fit: contain; // not needed, usually default
+        }
+        Text {
+            text: root.text;
+            color: white;
+            font-size: 16px;
+            font-weight: 600;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
     }
 
     touch := TouchArea {
@@ -140,16 +158,72 @@ component SidebarItem inherits Rectangle {
     in property <bool> is_active: false;
     callback clicked();
 
-    height: 40px;
+    height: 36px;
     border-radius: 8px;
-    background: is_active ? #bf00ff : (touch.has-hover ? #120024 : transparent);
-    drop-shadow-color: is_active ? #bf00ff66 : transparent;
-    drop-shadow-blur: is_active ? 10px : 0px;
-    animate background, drop-shadow-color, drop-shadow-blur { duration: 150ms; }
+    background: is_active ? #bf00ff33 : (touch.has-hover ? #ffffff11 : transparent);
     
-    Text { text: root.text; color: white; vertical-alignment: center; font-weight: 600; x: 12px; }
-    
-    touch := TouchArea { width: 100%; height: 100%; clicked => { root.clicked() } }
+    Rectangle {
+        width: 3px;
+        height: 20px;
+        border-radius: 1.5px;
+        background: is_active ? #00e5ff : transparent;
+        x: 0;
+        y: 8px;
+    }
+
+    Text {
+        text: root.text;
+        color: is_active ? #00e5ff : (touch.has-hover ? white : #aaa);
+        font-size: 14px;
+        font-weight: is_active ? 700 : 500;
+        x: 16px;
+        vertical-alignment: center;
+        height: 100%;
+    }
+
+    touch := TouchArea {
+        width: 100%;
+        height: 100%;
+        clicked => { root.clicked() }
+    }
+}
+
+component GlassActionCard inherits Rectangle {
+    in property <string> title;
+    in property <string> subtitle;
+    in property <image> icon;
+    callback clicked();
+
+    height: 70px;
+    border-radius: 12px;
+    background: touch.pressed ? #120024 : (touch.has-hover ? #1a0033 : #0A0010);
+    border-width: 1px;
+    border-color: touch.has-hover ? #bf00ff55 : #ffffff11;
+    drop-shadow-blur: touch.has-hover ? 15px : 5px;
+    drop-shadow-color: touch.has-hover ? #bf00ff33 : #00000055;
+
+    animate background, border-color, drop-shadow-color { duration: 200ms; }
+
+    HorizontalBox {
+        padding: 12px;
+        spacing: 16px;
+        alignment: start;
+
+        Rectangle {
+            width: 44px; height: 44px; border-radius: 22px;
+            background: #bf00ff22;
+            Image { source: root.icon; colorize: #00e5ff; width: 20px; height: 20px; x: 12px; y: 12px; }
+        }
+
+        VerticalBox {
+            alignment: center;
+            spacing: 2px;
+            Text { text: root.title; color: white; font-size: 14px; font-weight: 700; }
+            Text { text: root.subtitle; color: #888; font-size: 11px; }
+        }
+    }
+
+    touch := TouchArea { clicked => { root.clicked() } }
 }
 
 export component MainWindow inherits Window {
@@ -158,8 +232,8 @@ export component MainWindow inherits Window {
     background: transparent;
     
     // Dynamic Window Size based on active view
-    width: root.active_tab == 2 ? 700px : 340px;
-    height: root.active_tab == 2 ? 500px : 450px;
+    width: root.active_tab == 2 ? 1000px : 340px;
+    height: root.active_tab == 2 ? 600px : 450px;
     animate width, height { 
         duration: 300ms; 
         easing: ease-out; // Snappy but subtle
@@ -176,7 +250,7 @@ export component MainWindow inherits Window {
     callback settings_changed();
     callback add_subscription(string);
     callback delete_subscription(string);
-    callback update_subscriptions();
+    callback update_subscriptions(bool);
     callback ping_all();
     callback delete_all_proxies();
     callback ping_proxy(string);
@@ -199,6 +273,9 @@ export component MainWindow inherits Window {
     callback close_edit_modal();
     callback save_edit_proxy();
     // Properties
+    in-out property <string> filter_group: "All";
+    in-out property <[string]> subscription_groups: ["All", "Personal"];
+    callback filter_changed();
     in-out property <bool> connected: false;
     in-out property <string> current_ip: "N/A";
     in-out property <string> latency: "-";
@@ -224,6 +301,8 @@ export component MainWindow inherits Window {
     // UI State
     in-out property <int> active_tab: 0; // 0=Dashboard, 2=Settings (1 is deprecated)
     in-out property <int> active_settings_tab: 0; // 0=General, 1=V2Ray Core, 2=Configs, 3=Subscriptions
+    
+
     
     Rectangle {
         border-radius: 12px;
@@ -325,14 +404,16 @@ export component MainWindow inherits Window {
                 width: 340px;
                 height: 400px;
                 opacity: root.active_tab == 0 ? 1 : 0;
-                visible: self.opacity > 0;
+                x: self.opacity == 0 ? -2000px : 0px;
                 animate opacity { duration: 200ms; easing: ease-in-out; }
                 
                 // IP / Status text
                 VerticalBox {
                     x: 0px;
-                    y: 40px;
+                    y: 20px;
                     width: 340px;
+                    height: 60px;
+                    alignment: start;
                     spacing: 4px;
                     Text { 
                         text: root.is_scanning ? "Scanning Cloudflare..." : (root.connected ? "Connected" : "Disconnected"); 
@@ -346,11 +427,11 @@ export component MainWindow inherits Window {
                 
                 // Center Column: Power
                 Rectangle {
-                    x: (340px - 140px) / 2;
-                    y: 110px;
-                    width: 140px;
-                    height: 140px;
-                    border-radius: 70px;
+                    x: (340px - 120px) / 2;
+                    y: 100px;
+                    width: 120px;
+                    height: 120px;
+                    border-radius: 60px;
                     background: root.connected ? #00e5ff : #120024;
                     
                     drop-shadow-color: root.connected ? #00e5ff88 : transparent;
@@ -360,8 +441,8 @@ export component MainWindow inherits Window {
                     Image {
                         source: @image-url("power.svg");
                         colorize: root.connected ? #1c1c1e : #888888;
-                        width: 60px;
-                        height: 60px;
+                        width: 52px;
+                        height: 52px;
                         x: (parent.width - self.width) / 2;
                         y: (parent.height - self.height) / 2;
                     }
@@ -376,22 +457,24 @@ export component MainWindow inherits Window {
                 // Left Column: Speeds
                 VerticalBox {
                     x: 20px;
-                    y: 280px;
+                    y: 250px;
+                    width: 120px;
+                    height: 70px;
                     alignment: start;
                     spacing: 12px;
                     
                     HorizontalBox {
-                        spacing: 6px;
+                        padding: 0; spacing: 6px;
                         Image { source: @image-url("upload.svg"); colorize: #00e5ff; width: 14px; height: 14px; y: 1px; }
                         Text { text: root.upload_speed; color: white; font-size: 12px; font-weight: 600; }
                     }
                     HorizontalBox {
-                        spacing: 6px;
+                        padding: 0; spacing: 6px;
                         Image { source: @image-url("download.svg"); colorize: #bf00ff; width: 14px; height: 14px; y: 1px; }
                         Text { text: root.download_speed; color: white; font-size: 12px; font-weight: 600; }
                     }
                     HorizontalBox {
-                        spacing: 6px;
+                        padding: 0; spacing: 6px;
                         Image { source: @image-url("data.svg"); colorize: #ff007f; width: 14px; height: 14px; y: 1px; }
                         Text { text: root.total_data; color: white; font-size: 12px; font-weight: 600; }
                     }
@@ -399,14 +482,15 @@ export component MainWindow inherits Window {
                 
                 // Right Column: IP Info
                 VerticalBox {
-                    x: 340px - self.width - 20px;
-                    y: 290px;
+                    x: 340px - 140px - 20px;
+                    y: 260px;
+                    width: 140px;
+                    height: 50px;
                     alignment: start;
-                    spacing: 8px;
+                    spacing: 12px;
                     
                     HorizontalBox {
-                        alignment: end;
-                        spacing: 6px;
+                        padding: 0; spacing: 6px; alignment: end;
                         Image { source: @image-url("flag.svg"); colorize: #bf00ff; width: 14px; height: 14px; y: 1px; }
                         Text { text: root.ip_country; color: #bf00ff; font-size: 12px; font-weight: 700; }
                     }
@@ -416,7 +500,7 @@ export component MainWindow inherits Window {
                 // Location Bar
                 Rectangle {
                     x: 20px;
-                    y: 360px;
+                    y: 335px;
                     width: 300px;
                     height: 50px;
                     border-radius: 10px;
@@ -424,27 +508,38 @@ export component MainWindow inherits Window {
                     border-width: 1px;
                     border-color: #bf00ff33;
                     
-                    HorizontalBox {
-                        padding: 10px;
-                        spacing: 10px;
-                        
-                        Rectangle {
-                            width: 30px;
-                            height: 30px;
-                            border-radius: 15px;
-                            background: #444;
-                            Image { 
-                                source: @image-url("globe.svg"); 
-                                colorize: white;
-                                width: 16px;
-                                height: 16px;
-                                x: 7px; y: 7px;
-                            }
+                    Rectangle {
+                        x: 10px;
+                        y: 10px;
+                        width: 30px;
+                        height: 30px;
+                        border-radius: 15px;
+                        background: #444;
+                        Image { 
+                            source: @image-url("globe.svg"); 
+                            colorize: white;
+                            width: 16px;
+                            height: 16px;
+                            x: 7px; y: 7px;
                         }
-                        
-                        Text { text: root.active_config_name; color: white; vertical-alignment: center; font-size: 14px; font-weight: 500; }
-                        Rectangle { horizontal-stretch: 1; }
-                        Text { text: ">"; color: #888; vertical-alignment: center; font-size: 18px; font-weight: 700; }
+                    }
+                    
+                    Text { 
+                        x: 50px; y: 16px;
+                        width: 220px;
+                        text: root.active_config_name; 
+                        color: white; 
+                        font-size: 14px; 
+                        font-weight: 500;
+                        overflow: elide;
+                    }
+                    
+                    Text { 
+                        x: 275px; y: 16px;
+                        text: ">"; 
+                        color: #888; 
+                        font-size: 16px; 
+                        font-weight: 700; 
                     }
                     
                     TouchArea { 
@@ -457,10 +552,10 @@ export component MainWindow inherits Window {
             
             // TAB 2: SETTINGS (SPLIT VIEW)
             Rectangle {
-                width: 700px;
-                height: 450px;
+                width: 1000px;
+                height: 600px;
                 opacity: root.active_tab == 2 ? 1 : 0;
-                visible: self.opacity > 0;
+                x: self.opacity == 0 ? 2000px : 0px;
                 animate opacity { duration: 200ms; easing: ease-in-out; }
                 
                 HorizontalBox {
@@ -479,6 +574,8 @@ export component MainWindow inherits Window {
                         Text { text: "PREFERENCES"; color: #888; font-size: 11px; font-weight: 700; }
                         SidebarItem { text: "General"; is_active: root.active_settings_tab == 0; clicked => { root.active_settings_tab = 0; } }
                         SidebarItem { text: "V2Ray Core"; is_active: root.active_settings_tab == 1; clicked => { root.active_settings_tab = 1; } }
+                        SidebarItem { text: "Routing"; is_active: root.active_settings_tab == 4; clicked => { root.active_settings_tab = 4; } }
+                        SidebarItem { text: "DNS"; is_active: root.active_settings_tab == 5; clicked => { root.active_settings_tab = 5; } }
                         
                         Rectangle { height: 16px; } // spacer
                         
@@ -576,8 +673,33 @@ export component MainWindow inherits Window {
                         HorizontalBox {
                             Text { text: "Config Management"; color: white; font-size: 20px; font-weight: 700; vertical-alignment: center; }
                             Rectangle { horizontal-stretch: 1; }
-                            PremiumButton { text: "Ping All"; is_primary: false; height: 32px; width: 80px; clicked => { root.ping_all(); } }
-                            PremiumButton { text: "Delete All"; is_danger: true; height: 32px; width: 80px; clicked => { root.delete_all_proxies(); } }
+                            PremiumButton { text: "Ping All"; is_primary: false; has_icon: true; icon: @image-url("signal.svg"); height: 32px; width: 100px; clicked => { root.ping_all(); } }
+                            PremiumButton { text: "Delete All"; is_danger: true; has_icon: true; icon: @image-url("trash.svg"); height: 32px; width: 110px; clicked => { root.delete_all_proxies(); } }
+                        }
+                        
+                        HorizontalBox {
+                            spacing: 12px;
+                            GlassActionCard {
+                                horizontal-stretch: 1;
+                                title: "Import Clipboard";
+                                subtitle: "Paste copied links";
+                                icon: @image-url("copy.svg");
+                                clicked => { root.import_proxy("clipboard"); }
+                            }
+                            GlassActionCard {
+                                horizontal-stretch: 1;
+                                title: "Scan QR";
+                                subtitle: "From screen capture";
+                                icon: @image-url("qr.svg");
+                                clicked => {}
+                            }
+                            GlassActionCard {
+                                horizontal-stretch: 1;
+                                title: "Custom Config";
+                                subtitle: "Manually build node";
+                                icon: @image-url("edit.svg");
+                                clicked => { root.open_edit_proxy(""); }
+                            }
                         }
                         
                         HorizontalBox {
@@ -589,8 +711,10 @@ export component MainWindow inherits Window {
                             }
                             PremiumButton {
                                 text: "Add";
+                                has_icon: true;
+                                icon: @image-url("edit.svg");
                                 height: 36px;
-                                width: 60px;
+                                width: 80px;
                                 clicked => {
                                     root.import_proxy(parent.new_link);
                                     parent.new_link = "";
@@ -598,77 +722,89 @@ export component MainWindow inherits Window {
                             }
                         }
                         
+                        // TABS FOR GROUPS
+                        HorizontalBox {
+                            spacing: 10px;
+                            height: 36px;
+                            for group in root.subscription_groups: PremiumButton { 
+                                text: group; 
+                                width: 100px; 
+                                is_primary: root.filter_group == group; 
+                                clicked => { 
+                                    root.filter_group = group; 
+                                    root.filter_changed(); 
+                                } 
+                            }
+                            Rectangle { horizontal-stretch: 1; }
+                        }
+
+                        // GRID HEADER
+                        Rectangle {
+                            height: 30px;
+                            background: #1a0033;
+                            border-radius: 4px;
+                            HorizontalBox {
+                                padding-left: 10px; padding-right: 10px; spacing: 5px;
+                                Text { text: "Status"; width: 60px; color: #aaa; font-size: 12px; font-weight: 700; vertical-alignment: center; }
+                                Text { text: "Type"; width: 60px; color: #aaa; font-size: 12px; font-weight: 700; vertical-alignment: center; }
+                                Text { text: "Remarks"; width: 120px; color: #aaa; font-size: 12px; font-weight: 700; vertical-alignment: center; }
+                                Text { text: "Address"; width: 140px; color: #aaa; font-size: 12px; font-weight: 700; vertical-alignment: center; }
+                                Text { text: "Port"; width: 50px; color: #aaa; font-size: 12px; font-weight: 700; vertical-alignment: center; }
+                                Text { text: "Transport"; width: 70px; color: #aaa; font-size: 12px; font-weight: 700; vertical-alignment: center; }
+                                Text { text: "TLS"; width: 50px; color: #aaa; font-size: 12px; font-weight: 700; vertical-alignment: center; }
+                                Text { text: "Delay"; width: 60px; color: #aaa; font-size: 12px; font-weight: 700; vertical-alignment: center; }
+                                Text { text: "Actions"; width: 180px; color: #aaa; font-size: 12px; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; }
+                            }
+                        }
+                        
+                        // GRID BODY
                         ListView {
                             for item[index] in root.proxy_list: Rectangle {
-                                height: 130px;
+                                height: 36px;
+                                background: item.is_active ? #00e5ff22 : (index / 2 * 2 == index ? #120024 : #0A0010); // zebra striping
+                                border-radius: 4px;
                                 
-                                Rectangle {
-                                    height: 120px;
-                                    y: 5px;
-                                    border-radius: 12px;
-                                    background: item.is_active ? #00e5ff11 : #120024;
-                                    border-width: 1px;
-                                    border-color: item.is_active ? #00e5ff55 : #bf00ff22;
-                                    drop-shadow-blur: item.is_active ? 15px : 5px;
-                                    drop-shadow-color: item.is_active ? #00e5ff33 : #000000;
+                                HorizontalBox {
+                                    padding-left: 10px; padding-right: 10px; spacing: 5px;
                                     
-                                    VerticalBox {
-                                        padding: 14px;
-                                        spacing: 8px;
-                                        
-                                        // Top Row: Name and Protocol Badge
-                                        HorizontalBox {
-                                            alignment: space-between;
-                                            Text { text: item.name; color: item.is_active ? #00e5ff : white; font-size: 16px; font-weight: 700; overflow: elide; }
-                                            
-                                            // Protocol Badge
-                                            Rectangle {
-                                                background: #030005;
-                                                border-radius: 6px;
-                                                border-width: 1px;
-                                                border-color: #bf00ff55;
-                                                width: 50px;
-                                                height: 20px;
-                                                Text { text: item.protocol; color: #bf00ff; font-size: 10px; font-weight: 800; horizontal-alignment: center; vertical-alignment: center; }
-                                            }
+                                    // Status
+                                    Rectangle {
+                                        width: 60px;
+                                        Rectangle {
+                                            width: 44px; height: 20px; border-radius: 4px;
+                                            background: item.is_active ? #bf00ff : #333;
+                                            y: (parent.height - self.height) / 2;
+                                            Text { text: item.is_active ? "Active" : "-"; color: white; font-size: 10px; horizontal-alignment: center; vertical-alignment: center; font-weight: 600; }
                                         }
-                                        
-                                        // Middle Row: Latency Indicator
-                                        HorizontalBox {
-                                            spacing: 8px;
-                                            Rectangle { width: 10px; height: 10px; border-radius: 5px; background: item.latency_color; y: 2px; }
-                                            Text { text: "Latency: " + item.latency; color: #aaa; font-size: 12px; }
-                                        }
-                                        
-                                        Rectangle { vertical-stretch: 1; }
-                                        
-                                        // Bottom Row: Action Tools
-                                        HorizontalBox {
-                                            spacing: 6px;
-                                            alignment: space-between;
-                                            
-                                            // Select Button (Primary Icon)
-                                            IconButton {
-                                                icon: @image-url("power.svg");
-                                                tooltip_text: item.is_active ? "Connected" : "Connect";
-                                                is_primary: true;
-                                                clicked => {
-                                                    root.select_proxy(item.id);
-                                                    root.active_tab = 0; // jump back to dashboard
-                                                }
-                                            }
-                                            
-                                            HorizontalBox {
-                                                spacing: 6px;
-                                                alignment: end;
-                                                IconButton { icon: @image-url("signal.svg"); tooltip_text: "Ping Test"; clicked => { root.ping_proxy(item.id); } }
-                                                IconButton { icon: @image-url("edit.svg"); tooltip_text: "Edit Config"; clicked => { root.open_edit_proxy(item.id); } }
-                                                IconButton { icon: @image-url("qr.svg"); tooltip_text: "Share QR"; clicked => { root.show_qr_for_proxy(item.id); } }
-                                                IconButton { icon: @image-url("copy.svg"); tooltip_text: "Export"; clicked => { root.export_proxy(item.id); } }
-                                                IconButton { icon: @image-url("layers.svg"); tooltip_text: "Duplicate"; clicked => { root.duplicate_proxy(item.id); } }
-                                                IconButton { icon: @image-url("trash.svg"); tooltip_text: "Delete"; is_danger: true; clicked => { root.delete_proxy(item.id); } }
-                                            }
-                                        }
+                                    }
+                                    // Type
+                                    Text { text: item.protocol; width: 60px; color: white; font-size: 12px; vertical-alignment: center; }
+                                    // Remarks
+                                    Text { text: item.name; width: 120px; color: white; font-size: 12px; vertical-alignment: center; overflow: elide; }
+                                    // Address
+                                    Text { text: item.address; width: 140px; color: #aaa; font-size: 12px; vertical-alignment: center; overflow: elide; }
+                                    // Port
+                                    Text { text: item.port; width: 50px; color: white; font-size: 12px; vertical-alignment: center; }
+                                    // Transport
+                                    Text { text: item.transport; width: 70px; color: white; font-size: 12px; vertical-alignment: center; }
+                                    // TLS
+                                    Text { text: item.tls; width: 50px; color: white; font-size: 12px; vertical-alignment: center; }
+                                    // Delay
+                                    Text { text: item.latency; width: 60px; color: item.latency_color; font-size: 12px; vertical-alignment: center; font-weight: 600; }
+                                    
+                                    // Actions
+                                    HorizontalBox {
+                                        width: 180px;
+                                        alignment: end;
+                                        spacing: 4px;
+                                        padding: 3px;
+                                        IconButton { icon: @image-url("power.svg"); tooltip_text: "Connect"; is_primary: true; clicked => { root.select_proxy(item.id); root.active_tab = 0; } }
+                                        IconButton { icon: @image-url("signal.svg"); tooltip_text: "Ping"; clicked => { root.ping_proxy(item.id); } }
+                                        IconButton { icon: @image-url("edit.svg"); tooltip_text: "Edit"; clicked => { root.open_edit_proxy(item.id); } }
+                                        IconButton { icon: @image-url("qr.svg"); tooltip_text: "QR"; clicked => { root.show_qr_for_proxy(item.id); } }
+                                        IconButton { icon: @image-url("copy.svg"); tooltip_text: "Export"; clicked => { root.export_proxy(item.id); } }
+                                        IconButton { icon: @image-url("layers.svg"); tooltip_text: "Dup"; clicked => { root.duplicate_proxy(item.id); } }
+                                        IconButton { icon: @image-url("trash.svg"); tooltip_text: "Del"; is_danger: true; clicked => { root.delete_proxy(item.id); } }
                                     }
                                 }
                             }
@@ -685,9 +821,19 @@ export component MainWindow inherits Window {
                             Rectangle { horizontal-stretch: 1; }
                             PremiumButton {
                                 text: root.is_updating_subs ? "Updating..." : "Update All";
+                                has_icon: true;
+                                icon: @image-url("refresh.svg");
                                 height: 32px;
-                                width: 100px;
-                                clicked => { root.update_subscriptions(); }
+                                width: 120px;
+                                clicked => { root.update_subscriptions(false); }
+                            }
+                            PremiumButton {
+                                text: "Update via Proxy";
+                                has_icon: true;
+                                icon: @image-url("globe.svg");
+                                height: 32px;
+                                width: 160px;
+                                clicked => { root.update_subscriptions(true); }
                             }
                         }
                         
@@ -700,8 +846,10 @@ export component MainWindow inherits Window {
                             }
                             PremiumButton {
                                 text: "Add";
+                                has_icon: true;
+                                icon: @image-url("edit.svg");
                                 height: 36px;
-                                width: 60px;
+                                width: 80px;
                                 clicked => {
                                     root.add_subscription(parent.new_sub);
                                     parent.new_sub = "";
@@ -743,6 +891,25 @@ export component MainWindow inherits Window {
                                 }
                             }
                         }
+                    }
+                    
+                    // ROUTING SETTINGS
+                    if root.active_settings_tab == 4: VerticalBox {
+                        padding: 30px;
+                        spacing: 24px;
+                        alignment: start;
+                        Text { text: "Routing Setting"; color: white; font-size: 20px; font-weight: 700; }
+                        Text { text: "Configure global routing rules and domains. (Coming soon...)"; color: #888; font-size: 14px; }
+                        PremiumButton { text: "Import Chocolate4U Routing rules"; has_icon: true; icon: @image-url("download.svg"); width: 280px; clicked => {} }
+                    }
+                    
+                    // DNS SETTINGS
+                    if root.active_settings_tab == 5: VerticalBox {
+                        padding: 30px;
+                        spacing: 24px;
+                        alignment: start;
+                        Text { text: "DNS Settings"; color: white; font-size: 20px; font-weight: 700; }
+                        Text { text: "Configure custom nameservers. (Coming soon...)"; color: #888; font-size: 14px; }
                     }
                 }
                 }

@@ -118,6 +118,33 @@ pub fn generate_xray_config(protocol: &str, address: &str, port: u16, uuid: &str
         "log": {
             "loglevel": app_settings.log_level
         },
+        "dns": {
+            "servers": [
+                "1.1.1.1",
+                "8.8.8.8",
+                "localhost"
+            ]
+        },
+        "routing": {
+            "domainStrategy": "AsIs",
+            "rules": [
+                {
+                    "type": "field",
+                    "outboundTag": "direct",
+                    "ip": ["geoip:private", "geoip:cn"]
+                },
+                {
+                    "type": "field",
+                    "outboundTag": "direct",
+                    "domain": ["geosite:cn"]
+                },
+                {
+                    "type": "field",
+                    "outboundTag": "block",
+                    "domain": ["geosite:category-ads-all"]
+                }
+            ]
+        },
         "inbounds": [
             {
                 "port": app_settings.socks_port,
@@ -134,7 +161,15 @@ pub fn generate_xray_config(protocol: &str, address: &str, port: u16, uuid: &str
             }
         ],
         "outbounds": [
-            outbound
+            outbound,
+            {
+                "protocol": "freedom",
+                "tag": "direct"
+            },
+            {
+                "protocol": "blackhole",
+                "tag": "block"
+            }
         ]
     })
 }

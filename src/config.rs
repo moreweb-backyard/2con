@@ -7,6 +7,12 @@ pub struct Profile {
     pub name: String,
     pub protocol: String,
     pub raw_link: String,
+    #[serde(default = "default_sub_group")]
+    pub sub_group: String,
+}
+
+fn default_sub_group() -> String {
+    "Personal".to_string()
 }
 
 #[derive(Debug, Clone)]
@@ -19,6 +25,7 @@ pub struct ProxyConfig {
     pub path: String,
     pub tls: String,
     pub sni: String,
+    pub transport: String,
 }
 
 impl ProxyConfig {
@@ -38,6 +45,7 @@ impl ProxyConfig {
             let mut path = String::new();
             let mut tls = String::new();
             let mut sni = String::new();
+            let mut transport = String::new();
             
             for (key, value) in url.query_pairs() {
                 match key.as_ref() {
@@ -45,8 +53,13 @@ impl ProxyConfig {
                     "path" => path = value.to_string(),
                     "security" => tls = value.to_string(),
                     "sni" => sni = value.to_string(),
+                    "type" => transport = value.to_string(),
                     _ => {}
                 }
+            }
+            
+            if transport.is_empty() {
+                transport = "tcp".to_string();
             }
             
             Some(ProxyConfig {
@@ -58,6 +71,7 @@ impl ProxyConfig {
                 path,
                 tls,
                 sni,
+                transport,
             })
         } else {
             None
