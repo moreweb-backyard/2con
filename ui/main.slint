@@ -1,4 +1,6 @@
 import { Button, CheckBox, ComboBox, GroupBox, LineEdit, TextEdit, Switch, VerticalBox, HorizontalBox, ListView, ScrollView } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+import { PremiumButton, PremiumSwitch, IconButton, SidebarItem, GlassActionCard, PremiumScrollView, AppSectionCard, AppTextField, AppComboBox, StatusBadge, EmptyState, LoadingIndicator, ModalShell } from "components.slint";
 
 export struct ProxyItem {
     id: string,
@@ -20,238 +22,6 @@ export struct SubItem {
     last_updated: string,
 }
 
-component PremiumButton inherits Rectangle {
-    in property <string> text;
-    in property <bool> is_primary: true;
-    in property <bool> is_danger: false;
-    in property <bool> has_icon: false;
-    in property <image> icon;
-    callback clicked();
-
-    height: 48px;
-    border-radius: 8px;
-    background: touch.pressed ? (is_danger ? #991B1B : (is_primary ? #bf00ff : #120024)) : (touch.has-hover ? (is_danger ? #ff007f : (is_primary ? #d100ff : #1a0033)) : (is_danger ? #DC2626 : (is_primary ? #bf00ff : #0A0010)));
-    
-    drop-shadow-color: is_primary ? #bf00ff88 : transparent;
-    drop-shadow-blur: touch.has-hover ? 15px : 8px;
-    
-    animate background, drop-shadow-blur { duration: 150ms; }
-    
-    HorizontalBox {
-        alignment: center;
-        spacing: 8px;
-        if root.has_icon: Image {
-            source: root.icon;
-            width: 16px;
-            height: 16px;
-            colorize: white;
-            // image-fit: contain; // not needed, usually default
-        }
-        Text {
-            text: root.text;
-            color: white;
-            font-size: 16px;
-            font-weight: 600;
-            horizontal-alignment: center;
-            vertical-alignment: center;
-        }
-    }
-
-    touch := TouchArea {
-        width: 100%;
-        height: 100%;
-        clicked => { root.clicked() }
-    }
-}
-
-component PremiumSwitch inherits Rectangle {
-    in-out property <bool> checked: false;
-    callback toggled();
-
-    width: 44px;
-    height: 24px;
-    border-radius: 12px;
-    background: root.checked ? #00e5ff : #120024;
-    animate background { duration: 200ms; }
-
-    Rectangle {
-        width: 20px;
-        height: 20px;
-        border-radius: 10px;
-        background: white;
-        x: root.checked ? root.width - self.width - 2px : 2px;
-        y: 2px;
-        animate x { duration: 200ms; easing: ease-in-out; }
-    }
-
-    touch := TouchArea {
-        width: 100%;
-        height: 100%;
-        clicked => { 
-            root.checked = !root.checked;
-            root.toggled();
-        }
-    }
-}
-
-component IconButton inherits Rectangle {
-    in property <image> icon;
-    in property <string> tooltip_text;
-    in property <bool> is_primary: false;
-    in property <bool> is_danger: false;
-    callback clicked();
-
-    width: 36px;
-    height: 36px;
-    border-radius: 6px;
-    background: touch.pressed ? (is_danger ? #991B1B : (is_primary ? #bf00ff : #120024)) : (touch.has-hover ? (is_danger ? #ff007f : (is_primary ? #d100ff : #1a0033)) : transparent);
-    border-width: touch.has-hover ? 1px : 0px;
-    border-color: is_danger ? #ff007f55 : (is_primary ? #bf00ff55 : #ffffff22);
-    
-    drop-shadow-color: touch.has-hover ? (is_danger ? #ff007f66 : (is_primary ? #bf00ff66 : #ffffff33)) : transparent;
-    drop-shadow-blur: touch.has-hover ? 10px : 0px;
-    
-    animate background, drop-shadow-blur, border-width { duration: 150ms; }
-    
-    Image {
-        source: root.icon;
-        colorize: is_danger ? (touch.has-hover ? white : #ff007f) : (is_primary ? (touch.has-hover ? white : #bf00ff) : (touch.has-hover ? white : #aaaaaa));
-        width: 18px;
-        height: 18px;
-        x: (parent.width - self.width) / 2;
-        y: (parent.height - self.height) / 2;
-    }
-
-    touch := TouchArea {
-        width: 100%;
-        height: 100%;
-        clicked => { root.clicked() }
-    }
-    
-    // Tooltip
-    Rectangle {
-        y: -25px;
-        x: (parent.width - self.width) / 2;
-        width: tooltip_text_elem.width + 16px;
-        height: 22px;
-        border-radius: 4px;
-        background: #030005;
-        border-width: 1px;
-        border-color: is_danger ? #ff007f55 : #bf00ff55;
-        opacity: touch.has-hover ? 1 : 0;
-        animate opacity { duration: 200ms; }
-        
-        tooltip_text_elem := Text {
-            text: root.tooltip_text;
-            color: white;
-            font-size: 10px;
-            font-weight: 600;
-            horizontal-alignment: center;
-            vertical-alignment: center;
-            x: 8px;
-        }
-    }
-}
-
-component SidebarItem inherits Rectangle {
-    in property <string> text;
-    in property <bool> is_active: false;
-    callback clicked();
-
-    height: 36px;
-    border-radius: 8px;
-    background: is_active ? #bf00ff33 : (touch.has-hover ? #ffffff11 : transparent);
-    
-    Rectangle {
-        width: 3px;
-        height: 20px;
-        border-radius: 1.5px;
-        background: is_active ? #00e5ff : transparent;
-        x: 0;
-        y: 8px;
-    }
-
-    Text {
-        text: root.text;
-        color: is_active ? #00e5ff : (touch.has-hover ? white : #aaa);
-        font-size: 14px;
-        font-weight: is_active ? 700 : 500;
-        x: 16px;
-        vertical-alignment: center;
-        height: 100%;
-    }
-
-    touch := TouchArea {
-        width: 100%;
-        height: 100%;
-        clicked => { root.clicked() }
-    }
-}
-
-component GlassActionCard inherits Rectangle {
-    in property <string> title;
-    in property <string> subtitle;
-    in property <image> icon;
-    callback clicked();
-
-    height: 70px;
-    border-radius: 12px;
-    background: touch.pressed ? #120024 : (touch.has-hover ? #1a0033 : #0A0010);
-    border-width: 1px;
-    border-color: touch.has-hover ? #bf00ff55 : #ffffff11;
-    drop-shadow-blur: touch.has-hover ? 15px : 5px;
-    drop-shadow-color: touch.has-hover ? #bf00ff33 : #00000055;
-
-    animate background, border-color, drop-shadow-color { duration: 200ms; }
-
-    HorizontalBox {
-        padding: 12px;
-        spacing: 16px;
-        alignment: start;
-
-        Rectangle {
-            width: 44px; height: 44px; border-radius: 22px;
-            background: #bf00ff22;
-            Image { source: root.icon; colorize: #00e5ff; width: 20px; height: 20px; x: 12px; y: 12px; }
-        }
-
-        VerticalBox {
-            alignment: center;
-            spacing: 2px;
-            Text { text: root.title; color: white; font-size: 14px; font-weight: 700; }
-            Text { text: root.subtitle; color: #888; font-size: 11px; }
-        }
-    }
-
-    touch := TouchArea { clicked => { root.clicked() } }
-}
-
-export component PremiumScrollView inherits Rectangle {
-    in property <length> viewport_height;
-    out property <length> viewport_y: flick.viewport-y;
-    
-    clip: true;
-    
-    flick := Flickable {
-        width: parent.width;
-        height: parent.height;
-        viewport-height: root.viewport_height;
-        @children
-    }
-    
-    // Custom Purple Scrollbar
-    if (flick.viewport-height > flick.height): Rectangle {
-        width: 6px;
-        height: max(20px, flick.height * (flick.height / flick.viewport-height));
-        x: parent.width - 8px;
-        y: -flick.viewport-y * (flick.height / flick.viewport-height);
-        background: #bb86fc88;
-        border-radius: 3px;
-        
-        // Hover and interaction could be added here, but mouse wheel works natively via Flickable
-    }
-}
-
 export component MainWindow inherits Window {
     title: "2con Client";
     no-frame: true;
@@ -261,7 +31,7 @@ export component MainWindow inherits Window {
     width: root.active_tab == 2 ? 1000px : 340px;
     height: root.active_tab == 2 ? 600px : 450px;
     animate width, height { 
-        duration: 300ms; 
+        duration: 200ms; 
         easing: ease-out; // Snappy but subtle
     }
     
@@ -299,6 +69,15 @@ export component MainWindow inherits Window {
     callback open_edit_proxy(string);
     callback close_edit_modal();
     callback save_edit_proxy();
+    
+    in-out property <bool> show_delete_proxy_modal: false;
+    in-out property <string> delete_proxy_id: "";
+    
+    in-out property <bool> show_delete_all_modal: false;
+    
+    in-out property <bool> show_delete_sub_modal: false;
+    in-out property <string> delete_sub_id: "";
+    
     // Properties
     in-out property <string> filter_group: "All";
     in-out property <[string]> subscription_groups: ["All", "Personal"];
@@ -312,7 +91,6 @@ export component MainWindow inherits Window {
     
     in-out property <string> app_logs: "2con Client Initialized...\n";
     callback clear_logs();
-    
     
     in-out property <string> upload_speed: "0 B/s";
     in-out property <string> download_speed: "0 B/s";
@@ -356,22 +134,13 @@ export component MainWindow inherits Window {
     in-out property <int> active_tab: 0; // 0=Dashboard, 2=Settings (1 is deprecated)
     in-out property <int> active_settings_tab: 0; // 0=General, 1=V2Ray Core, 2=Configs, 3=Subscriptions
     
+    pure callback is_valid_proxy_link(string) -> bool;
+    pure callback is_valid_sub_link(string) -> bool;
 
-    
     Rectangle {
-        border-radius: 12px;
-        background: #030005;
+        border-radius: Theme.radius-large;
+        background: Theme.app-bg;
         clip: true;
-        
-        // Top-Left Dynamic Glow
-        Rectangle {
-            width: 1000px;
-            height: 1000px;
-            x: -400px;
-            y: -400px;
-            background: @radial-gradient(circle, #bf00ff22 0%, transparent 65%);
-            opacity: 0.5 + 0.5 * Math.sin(animation-tick() / 8s * 360deg);
-        }
         
         // Window Drag Area (Background)
         TouchArea {
@@ -392,29 +161,14 @@ export component MainWindow inherits Window {
                 alignment: space-between;
                 
                 // Hamburger Menu / Back Button
-                Rectangle {
-                    width: 30px;
-                    height: 30px;
-                    border-radius: 8px;
-                    background: hamburger_touch.has-hover ? #444 : transparent;
-                    animate background { duration: 150ms; }
-                    
-                    Image {
-                        source: root.active_tab == 0 ? @image-url("menu.svg") : @image-url("back.svg");
-                        colorize: white;
-                        width: 20px; height: 20px;
-                        x: (parent.width - 20px) / 2;
-                        y: (parent.height - 20px) / 2;
-                    }
-                    
-                    hamburger_touch := TouchArea {
-                        width: 100%; height: 100%;
-                        clicked => {
-                            if root.active_tab == 2 {
-                                root.active_tab = 0; // Go back to Dashboard
-                            } else {
-                                root.active_tab = 2; // Open Settings
-                            }
+                IconButton {
+                    icon: root.active_tab == 0 ? @image-url("settings.svg") : @image-url("back.svg");
+                    tooltip_text: root.active_tab == 0 ? "Settings" : "Back to Dashboard";
+                    clicked => {
+                        if root.active_tab == 2 {
+                            root.active_tab = 0; // Go back to Dashboard
+                        } else {
+                            root.active_tab = 2; // Open Settings
                         }
                     }
                 }
@@ -422,23 +176,25 @@ export component MainWindow inherits Window {
                 // Title
                 Text {
                     text: root.active_tab == 2 ? "Settings" : "2con Client";
-                    color: white;
-                    font-size: 16px;
+                    color: Theme.text-primary;
+                    font-size: Theme.font-body-large;
                     font-weight: 700;
                     vertical-alignment: center;
                 }
                 
                 // Close Button
+                IconButton {
+                    icon: @image-url("trash.svg"); // Reusing trash or an X icon. We'll use a standard slint trick or standard close icon later, for now let's just make it a danger button. Let's use a Text instead to make it an X since there's no close.svg
+                    visible: false;
+                }
                 Rectangle {
-                    width: 24px;
-                    height: 24px;
-                    border-radius: 12px;
-                    background: close_touch.has-hover ? #ff4444 : transparent;
-                    border-width: 1px;
-                    border-color: #555;
+                    width: 32px;
+                    height: 32px;
+                    border-radius: Theme.radius-small;
+                    background: close_touch.pressed ? Theme.danger-pressed : (close_touch.has-hover ? Theme.danger : transparent);
                     animate background { duration: 150ms; }
                     
-                    Text { text: "x"; color: white; font-size: 14px; horizontal-alignment: center; vertical-alignment: center; }
+                    Text { text: "x"; color: Theme.text-primary; font-size: Theme.font-body-large; horizontal-alignment: center; vertical-alignment: center; }
                     close_touch := TouchArea { 
                         width: 100%; height: 100%;
                         clicked => { root.close_window() } 
@@ -458,148 +214,111 @@ export component MainWindow inherits Window {
                 width: 340px;
                 height: 400px;
                 opacity: root.active_tab == 0 ? 1 : 0;
-                x: self.opacity == 0 ? -2000px : 0px;
+                visible: self.opacity > 0;
                 animate opacity { duration: 200ms; easing: ease-in-out; }
                 
-                // IP / Status text
-                VerticalBox {
-                    x: 0px;
-                    y: 20px;
-                    width: 340px;
-                    height: 60px;
+                VerticalLayout {
+                    padding: 20px;
+                    spacing: 20px;
                     alignment: start;
-                    spacing: 4px;
-                    Text { 
-                        text: root.is_scanning ? "Scanning Cloudflare..." : (root.connected ? "Connected" : "Disconnected"); 
-                        color: root.is_scanning ? #00e5ff : (root.connected ? #bf00ff : #aaaaaa); 
-                        font-size: 16px; 
-                        horizontal-alignment: center; 
-                        font-weight: 700; 
-                    }
-                    Text { text: "Latency: " + root.latency; color: #777777; font-size: 12px; horizontal-alignment: center; }
-                }
-                
-                // Center Column: Power
-                Rectangle {
-                    x: (340px - 120px) / 2;
-                    y: 100px;
-                    width: 120px;
-                    height: 120px;
-                    border-radius: 60px;
-                    background: root.connected ? #00e5ff : #120024;
                     
-                    drop-shadow-color: root.connected ? #00e5ff88 : transparent;
-                    drop-shadow-blur: 20px;
-                    animate background, drop-shadow-color { duration: 300ms; }
-                    
-                    Image {
-                        source: @image-url("power.svg");
-                        colorize: root.connected ? #1c1c1e : #888888;
-                        width: 52px;
-                        height: 52px;
-                        x: (parent.width - self.width) / 2;
-                        y: (parent.height - self.height) / 2;
+                    // Connection Status
+                    VerticalLayout {
+                        alignment: center;
+                        spacing: 4px;
+                        height: 60px;
+                        Text { 
+                            text: root.is_scanning ? "Scanning Cloudflare..." : (root.active_config_name == "Select Configuration" ? "No Proxy Selected" : (root.connected ? "Connected" : "Disconnected")); 
+                            color: root.is_scanning ? Theme.secondary : (root.active_config_name == "Select Configuration" ? Theme.warning : (root.connected ? Theme.primary : Theme.text-secondary)); 
+                            font-size: Theme.font-title; 
+                            horizontal-alignment: center; 
+                            font-weight: 700; 
+                        }
+                        Text { text: "Latency: " + root.latency; color: Theme.text-muted; font-size: Theme.font-sub; horizontal-alignment: center; }
                     }
                     
-                    TouchArea { 
-                        width: 100%;
-                        height: 100%;
-                        clicked => { root.toggle_connect(); } 
-                    }
-                }
-                
-                // Left Column: Speeds
-                VerticalBox {
-                    x: 20px;
-                    y: 250px;
-                    width: 120px;
-                    height: 70px;
-                    alignment: start;
-                    spacing: 12px;
-                    
-                    HorizontalBox {
-                        padding: 0; spacing: 6px;
-                        Image { source: @image-url("upload.svg"); colorize: #00e5ff; width: 14px; height: 14px; y: 1px; }
-                        Text { text: root.upload_speed; color: white; font-size: 12px; font-weight: 600; }
-                    }
-                    HorizontalBox {
-                        padding: 0; spacing: 6px;
-                        Image { source: @image-url("download.svg"); colorize: #bf00ff; width: 14px; height: 14px; y: 1px; }
-                        Text { text: root.download_speed; color: white; font-size: 12px; font-weight: 600; }
-                    }
-                    HorizontalBox {
-                        padding: 0; spacing: 6px;
-                        Image { source: @image-url("data.svg"); colorize: #ff007f; width: 14px; height: 14px; y: 1px; }
-                        Text { text: root.total_data; color: white; font-size: 12px; font-weight: 600; }
-                    }
-                }
-                
-                // Right Column: IP Info
-                VerticalBox {
-                    x: 340px - 140px - 20px;
-                    y: 260px;
-                    width: 140px;
-                    height: 50px;
-                    alignment: start;
-                    spacing: 12px;
-                    
-                    HorizontalBox {
-                        padding: 0; spacing: 6px; alignment: end;
-                        Image { source: @image-url("flag.svg"); colorize: #bf00ff; width: 14px; height: 14px; y: 1px; }
-                        Text { text: root.ip_country; color: #bf00ff; font-size: 12px; font-weight: 700; }
-                    }
-                    Text { text: root.current_ip; color: white; font-size: 11px; font-weight: 600; horizontal-alignment: right; }
-                }
-                
-                // Location Bar
-                Rectangle {
-                    x: 20px;
-                    y: 335px;
-                    width: 300px;
-                    height: 50px;
-                    border-radius: 10px;
-                    background: #120024;
-                    border-width: 1px;
-                    border-color: #bf00ff33;
-                    
+                    // Power Button
                     Rectangle {
-                        x: 10px;
-                        y: 10px;
-                        width: 30px;
-                        height: 30px;
-                        border-radius: 15px;
-                        background: #444;
-                        Image { 
-                            source: @image-url("globe.svg"); 
-                            colorize: white;
-                            width: 16px;
-                            height: 16px;
-                            x: 7px; y: 7px;
+                        height: 120px;
+                        HorizontalLayout {
+                            alignment: center;
+                            Rectangle {
+                                width: 120px;
+                                height: 120px;
+                                border-radius: 60px;
+                                background: root.connected ? Theme.secondary : Theme.surface-raised;
+                                
+                                drop-shadow-color: root.connected ? #00e5ff44 : transparent;
+                                drop-shadow-blur: 20px;
+                                animate background, drop-shadow-color { duration: 300ms; }
+                                
+                                Image {
+                                    source: @image-url("power.svg");
+                                    colorize: root.connected ? #1c1c1e : Theme.text-muted;
+                                    width: 52px;
+                                    height: 52px;
+                                    x: (parent.width - self.width) / 2;
+                                    y: (parent.height - self.height) / 2;
+                                }
+                                
+                                TouchArea { 
+                                    width: 100%;
+                                    height: 100%;
+                                    clicked => { root.toggle_connect(); } 
+                                }
+                            }
                         }
                     }
                     
-                    Text { 
-                        x: 50px; y: 16px;
-                        width: 220px;
-                        text: root.active_config_name; 
-                        color: white; 
-                        font-size: 14px; 
-                        font-weight: 500;
-                        overflow: elide;
+                    // Stats Row
+                    HorizontalLayout {
+                        height: 70px;
+                        alignment: space-between;
+                        
+                        VerticalLayout {
+                            alignment: start;
+                            spacing: 12px;
+                            width: 120px;
+                            HorizontalLayout { padding: 0; spacing: 6px; Image { source: @image-url("upload.svg"); colorize: Theme.secondary; width: 14px; height: 14px; y: 1px; } Text { text: root.upload_speed; color: Theme.text-primary; font-size: Theme.font-sub; font-weight: 600; } }
+                            HorizontalLayout { padding: 0; spacing: 6px; Image { source: @image-url("download.svg"); colorize: Theme.primary; width: 14px; height: 14px; y: 1px; } Text { text: root.download_speed; color: Theme.text-primary; font-size: Theme.font-sub; font-weight: 600; } }
+                            HorizontalLayout { padding: 0; spacing: 6px; Image { source: @image-url("data.svg"); colorize: Theme.danger; width: 14px; height: 14px; y: 1px; } Text { text: root.total_data; color: Theme.text-primary; font-size: Theme.font-sub; font-weight: 600; } }
+                        }
+                        
+                        VerticalLayout {
+                            alignment: start;
+                            spacing: 12px;
+                            width: 140px;
+                            HorizontalLayout { alignment: end; spacing: 6px; Image { source: @image-url("flag.svg"); colorize: Theme.primary; width: 14px; height: 14px; y: 1px; } Text { text: root.ip_country; color: Theme.primary; font-size: Theme.font-sub; font-weight: 700; } }
+                            Text { text: root.current_ip; color: Theme.text-primary; font-size: Theme.font-caption; font-weight: 600; horizontal-alignment: right; }
+                        }
                     }
                     
-                    Text { 
-                        x: 275px; y: 16px;
-                        text: ">"; 
-                        color: #888; 
-                        font-size: 16px; 
-                        font-weight: 700; 
-                    }
-                    
-                    TouchArea { 
-                        width: 100%;
-                        height: 100%;
-                        clicked => { root.active_tab = 2; root.active_settings_tab = 2; } 
+                    // Location Selector
+                    Rectangle {
+                        height: 50px;
+                        border-radius: Theme.radius-medium;
+                        background: Theme.surface-raised;
+                        border-width: 1px;
+                        border-color: Theme.border;
+                        
+                        HorizontalLayout {
+                            padding: 10px;
+                            spacing: 10px;
+                            alignment: start;
+                            
+                            Rectangle {
+                                width: 30px; height: 30px; border-radius: 15px; background: Theme.surface-hover;
+                                Image { source: @image-url("globe.svg"); colorize: Theme.text-primary; width: 16px; height: 16px; x: 7px; y: 7px; }
+                            }
+                            
+                            Text { text: root.active_config_name; color: Theme.text-primary; font-size: Theme.font-body; font-weight: 500; vertical-alignment: center; horizontal-stretch: 1; overflow: elide; }
+                            Text { text: ">"; color: Theme.text-muted; font-size: Theme.font-body-large; font-weight: 700; vertical-alignment: center; }
+                        }
+                        
+                        TouchArea { 
+                            width: 100%; height: 100%;
+                            clicked => { root.active_tab = 2; root.active_settings_tab = 2; } 
+                        }
                     }
                 }
             }
@@ -609,528 +328,444 @@ export component MainWindow inherits Window {
                 width: 1000px;
                 height: 600px;
                 opacity: root.active_tab == 2 ? 1 : 0;
-                x: self.opacity == 0 ? 2000px : 0px;
+                visible: self.opacity > 0;
                 animate opacity { duration: 200ms; easing: ease-in-out; }
                 
                 HorizontalBox {
-                padding: 0px;
-                // Sidebar
-                Rectangle {
-                    width: 180px;
-                    background: #0A0010;
-                    Rectangle { width: 1px; height: 100%; background: #120024; x: parent.width - 1px; }
-                    
-                    VerticalBox {
-                        padding: 16px;
-                        spacing: 8px;
-                        alignment: start;
+                    padding: 0px;
+                    // Sidebar
+                    Rectangle {
+                        width: 180px;
+                        background: Theme.surface;
+                        Rectangle { width: 1px; height: 100%; background: Theme.surface-raised; x: parent.width - 1px; }
                         
-                        Text { text: "PREFERENCES"; color: #888; font-size: 11px; font-weight: 700; }
-                        SidebarItem { text: "General"; is_active: root.active_settings_tab == 0; clicked => { root.active_settings_tab = 0; } }
-                        SidebarItem { text: "V2Ray Core"; is_active: root.active_settings_tab == 1; clicked => { root.active_settings_tab = 1; } }
-                        SidebarItem { text: "Routing"; is_active: root.active_settings_tab == 4; clicked => { root.active_settings_tab = 4; } }
-                        SidebarItem { text: "DNS"; is_active: root.active_settings_tab == 5; clicked => { root.active_settings_tab = 5; } }
-                        
-                        Rectangle { height: 16px; } // spacer
-                        
-                        Text { text: "MANAGEMENT"; color: #888; font-size: 11px; font-weight: 700; }
-                        SidebarItem { text: "Configs"; is_active: root.active_settings_tab == 2; clicked => { root.active_settings_tab = 2; } }
-                        SidebarItem { text: "Subscriptions"; is_active: root.active_settings_tab == 3; clicked => { root.active_settings_tab = 3; } }
-                        SidebarItem { text: "Logs"; is_active: root.active_settings_tab == 6; clicked => { root.active_settings_tab = 6; } }
-                        
-                        
-                        Rectangle { horizontal-stretch: 1; vertical-stretch: 1; }
-                        
-                        Text { text: "About"; color: #aaa; font-size: 12px; }
-                        Text { text: "2con Client v0.1.0\nHigh-performance proxy client built with Rust & Slint."; color: #888; font-size: 12px; wrap: word-wrap; }
-                    }
-                }
-                
-                // Content Right Side
-                Rectangle {
-                    horizontal-stretch: 1;
-                    clip: true;
-                    
-                    if root.active_settings_tab == 0: PremiumScrollView {
-                        viewport_height: gen_content.preferred-height;
-                        gen_content := VerticalBox {
-                            padding: 30px;
-                            spacing: 24px;
+                        VerticalBox {
+                            padding: 16px;
+                            spacing: 8px;
                             alignment: start;
                             
-                            Text { text: "General Settings"; color: white; font-size: 24px; font-weight: 700; }
+                            Text { text: "PREFERENCES"; color: Theme.text-muted; font-size: Theme.font-caption; font-weight: 700; }
+                            SidebarItem { text: "General"; is_active: root.active_settings_tab == 0; clicked => { root.active_settings_tab = 0; } }
+                            SidebarItem { text: "V2Ray Core"; is_active: root.active_settings_tab == 1; clicked => { root.active_settings_tab = 1; } }
+                            SidebarItem { text: "Routing"; is_active: root.active_settings_tab == 4; clicked => { root.active_settings_tab = 4; } }
+                            SidebarItem { text: "DNS"; is_active: root.active_settings_tab == 5; clicked => { root.active_settings_tab = 5; } }
                             
-                            HorizontalBox {
-                                Text { text: "Autopilot Mode"; color: white; vertical-alignment: center; font-size: 16px; }
-                                Rectangle { horizontal-stretch: 1; }
-                                PremiumSwitch {
-                                    checked: root.autopilot_enabled;
-                                    toggled => {
-                                        root.set_autopilot(self.checked);
-                                    }
-                                }
-                            }
+                            Rectangle { height: 16px; } // spacer
                             
-                            VerticalBox {
-                                spacing: 8px;
-                                Text { text: "Docking Position"; color: white; font-size: 16px; }
-                                Text { text: "Snap the client to a specific screen corner."; color: #888; font-size: 12px; }
-                                ComboBox {
-                                    model: ["None", "Top Left", "Top Right", "Bottom Left", "Bottom Right"];
-                                    current-value <=> root.docking_position;
-                                    selected => { root.settings_changed(); }
-                                }
-                            }
+                            Text { text: "MANAGEMENT"; color: Theme.text-muted; font-size: Theme.font-caption; font-weight: 700; }
+                            SidebarItem { text: "Configs"; is_active: root.active_settings_tab == 2; clicked => { root.active_settings_tab = 2; } }
+                            SidebarItem { text: "Subscriptions"; is_active: root.active_settings_tab == 3; clicked => { root.active_settings_tab = 3; } }
+                            SidebarItem { text: "Logs"; is_active: root.active_settings_tab == 6; clicked => { root.active_settings_tab = 6; } }
                             
-                            HorizontalBox {
-                                Text { text: "Start on Boot"; color: white; vertical-alignment: center; font-size: 16px; }
-                                Rectangle { horizontal-stretch: 1; }
-                                PremiumSwitch {
-                                    checked <=> root.start_on_boot;
-                                    toggled => { root.settings_changed(); }
-                                }
-                            }
+                            Rectangle { horizontal-stretch: 1; vertical-stretch: 1; }
                             
-                            VerticalBox {
-                                spacing: 8px;
-                                Text { text: "Auto-Update Geo Interval (Hours)"; color: white; font-size: 16px; }
-                                Text { text: "0 to disable automatic updates."; color: #888; font-size: 12px; }
-                                LineEdit {
-                                    text <=> root.auto_update_geo;
-                                    input-type: number;
-                                    edited => { root.settings_changed(); }
-                                }
-                            }
+                            Text { text: "About"; color: Theme.text-secondary; font-size: Theme.font-sub; }
+                            Text { text: "2con Client v0.1.0\nHigh-performance proxy client built with Rust & Slint."; color: Theme.text-muted; font-size: Theme.font-sub; wrap: word-wrap; }
                         }
                     }
                     
-                    // V2RAY CORE SETTINGS
-                    if root.active_settings_tab == 1: PremiumScrollView {
-                        viewport_height: v2ray_content.preferred-height;
-                        v2ray_content := VerticalBox {
-                            padding: 30px;
-                            spacing: 24px;
-                            alignment: start;
-                            
-                            Text { text: "V2Ray Core Settings"; color: white; font-size: 24px; font-weight: 700; }
-                            
-                            VerticalBox {
-                                spacing: 8px;
-                                Text { text: "SOCKS Inbound Port"; color: white; font-size: 16px; }
-                                LineEdit {
-                                    text <=> root.socks_port;
-                                    edited => { root.settings_changed(); }
-                                }
-                            }
-                            
-                            VerticalBox {
-                                spacing: 8px;
-                                Text { text: "Log Level"; color: white; font-size: 16px; }
-                                ComboBox {
-                                    model: ["debug", "info", "warning", "error", "none"];
-                                    current-value <=> root.log_level;
-                                    selected => { root.settings_changed(); }
-                                }
-                            }
-                            
-                            HorizontalBox {
-                                Text { text: "Mux (Multiplexing)"; color: white; vertical-alignment: center; font-size: 16px; }
-                                Rectangle { horizontal-stretch: 1; }
-                                PremiumSwitch {
-                                    checked <=> root.mux_enabled;
-                                    toggled => { root.settings_changed(); }
-                                }
-                            }
-                            
-                            HorizontalBox {
-                                Text { text: "Enable UDP"; color: white; vertical-alignment: center; font-size: 16px; }
-                                Rectangle { horizontal-stretch: 1; }
-                                PremiumSwitch {
-                                    checked <=> root.enable_udp;
-                                    toggled => { root.settings_changed(); }
-                                }
-                            }
-                            
-                            HorizontalBox {
-                                Text { text: "Allow LAN Connections"; color: white; vertical-alignment: center; font-size: 16px; }
-                                Rectangle { horizontal-stretch: 1; }
-                                PremiumSwitch {
-                                    checked <=> root.allow_lan;
-                                    toggled => { root.settings_changed(); }
-                                }
-                            }
-                            
-                            HorizontalBox {
-                                Text { text: "Enable Sniffing"; color: white; vertical-alignment: center; font-size: 16px; }
-                                Rectangle { horizontal-stretch: 1; }
-                                PremiumSwitch {
-                                    checked <=> root.enable_sniffing;
-                                    toggled => { root.settings_changed(); }
-                                }
-                            }
-                            
-                            HorizontalBox {
-                                Text { text: "Enable Fragment"; color: white; vertical-alignment: center; font-size: 16px; }
-                                Rectangle { horizontal-stretch: 1; }
-                                PremiumSwitch {
-                                    checked <=> root.enable_fragment;
-                                    toggled => { root.settings_changed(); }
-                                }
-                            }
-                        }
-                    }
-                    
-                    // CONFIGS SETTINGS
-                    if root.active_settings_tab == 2: VerticalBox {
-                        padding: 20px;
-                        spacing: 12px;
+                    // Content Right Side
+                    Rectangle {
+                        horizontal-stretch: 1;
+                        clip: true;
                         
-                        HorizontalBox {
-                            Text { text: "Config Management"; color: white; font-size: 20px; font-weight: 700; vertical-alignment: center; }
-                            Rectangle { horizontal-stretch: 1; }
-                            PremiumButton { text: "Ping All"; is_primary: false; has_icon: true; icon: @image-url("signal.svg"); height: 32px; width: 100px; clicked => { root.ping_all(); } }
-                            PremiumButton { text: "Delete All"; is_danger: true; has_icon: true; icon: @image-url("trash.svg"); height: 32px; width: 110px; clicked => { root.delete_all_proxies(); } }
-                        }
-                        
-                        HorizontalBox {
-                            spacing: 12px;
-                            GlassActionCard {
-                                horizontal-stretch: 1;
-                                title: "Import Clipboard";
-                                subtitle: "Paste copied links";
-                                icon: @image-url("copy.svg");
-                                clicked => { root.import_proxy("clipboard"); }
-                            }
-                            GlassActionCard {
-                                horizontal-stretch: 1;
-                                title: "Scan QR";
-                                subtitle: "From screen capture";
-                                icon: @image-url("qr.svg");
-                                clicked => {}
-                            }
-                            GlassActionCard {
-                                horizontal-stretch: 1;
-                                title: "Custom Config";
-                                subtitle: "Manually build node";
-                                icon: @image-url("edit.svg");
-                                clicked => { root.open_edit_proxy(""); }
-                            }
-                        }
-                        
-                        HorizontalBox {
-                            in-out property <string> new_link: "";
-                            LineEdit {
-                                placeholder-text: "Paste vless:// or trojan:// link...";
-                                text <=> parent.new_link;
-                                height: 36px;
-                            }
-                            PremiumButton {
-                                text: "Add";
-                                has_icon: true;
-                                icon: @image-url("edit.svg");
-                                height: 36px;
-                                width: 80px;
-                                clicked => {
-                                    root.import_proxy(parent.new_link);
-                                    parent.new_link = "";
-                                }
-                            }
-                        }
-                        
-                        // TABS FOR GROUPS
-                        HorizontalBox {
-                            spacing: 10px;
-                            height: 36px;
-                            for group in root.subscription_groups: PremiumButton { 
-                                text: group; 
-                                width: 100px; 
-                                is_primary: root.filter_group == group; 
-                                clicked => { 
-                                    root.filter_group = group; 
-                                    root.filter_changed(); 
-                                } 
-                            }
-                            Rectangle { horizontal-stretch: 1; }
-                        }
-
-                        // GRID HEADER
-                        Rectangle {
-                            height: 30px;
-                            background: #1a0033;
-                            border-radius: 4px;
-                            HorizontalBox {
-                                padding-left: 10px; padding-right: 10px; spacing: 5px;
-                                Text { text: "Status"; width: 60px; color: #aaa; font-size: 12px; font-weight: 700; vertical-alignment: center; }
-                                Text { text: "Type"; width: 60px; color: #aaa; font-size: 12px; font-weight: 700; vertical-alignment: center; }
-                                Text { text: "Remarks"; width: 120px; color: #aaa; font-size: 12px; font-weight: 700; vertical-alignment: center; }
-                                Text { text: "Address"; width: 140px; color: #aaa; font-size: 12px; font-weight: 700; vertical-alignment: center; }
-                                Text { text: "Port"; width: 50px; color: #aaa; font-size: 12px; font-weight: 700; vertical-alignment: center; }
-                                Text { text: "Transport"; width: 70px; color: #aaa; font-size: 12px; font-weight: 700; vertical-alignment: center; }
-                                Text { text: "TLS"; width: 50px; color: #aaa; font-size: 12px; font-weight: 700; vertical-alignment: center; }
-                                Text { text: "Delay"; width: 60px; color: #aaa; font-size: 12px; font-weight: 700; vertical-alignment: center; }
-                                Text { text: "Actions"; width: 180px; color: #aaa; font-size: 12px; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; }
-                            }
-                        }
-                        
-                        // GRID BODY
-                        ListView {
-                            for item[index] in root.proxy_list: Rectangle {
-                                height: 36px;
-                                background: item.is_active ? #00e5ff22 : (index / 2 * 2 == index ? #120024 : #0A0010); // zebra striping
-                                border-radius: 4px;
+                        // GENERAL SETTINGS
+                        if root.active_settings_tab == 0: PremiumScrollView {
+                            viewport_height: gen_content.preferred-height;
+                            gen_content := VerticalBox {
+                                padding: 30px; spacing: 24px; alignment: start;
+                                Text { text: "General Settings"; color: Theme.text-primary; font-size: Theme.font-title; font-weight: 700; }
                                 
-                                HorizontalBox {
-                                    padding-left: 10px; padding-right: 10px; spacing: 5px;
-                                    
-                                    // Status
-                                    Rectangle {
-                                        width: 60px;
-                                        Rectangle {
-                                            width: 44px; height: 20px; border-radius: 4px;
-                                            background: item.is_active ? #bf00ff : #333;
-                                            y: (parent.height - self.height) / 2;
-                                            Text { text: item.is_active ? "Active" : "-"; color: white; font-size: 10px; horizontal-alignment: center; vertical-alignment: center; font-weight: 600; }
-                                        }
-                                    }
-                                    // Type
-                                    Text { text: item.protocol; width: 60px; color: white; font-size: 12px; vertical-alignment: center; }
-                                    // Remarks
-                                    Text { text: item.name; width: 120px; color: white; font-size: 12px; vertical-alignment: center; overflow: elide; }
-                                    // Address
-                                    Text { text: item.address; width: 140px; color: #aaa; font-size: 12px; vertical-alignment: center; overflow: elide; }
-                                    // Port
-                                    Text { text: item.port; width: 50px; color: white; font-size: 12px; vertical-alignment: center; }
-                                    // Transport
-                                    Text { text: item.transport; width: 70px; color: white; font-size: 12px; vertical-alignment: center; }
-                                    // TLS
-                                    Text { text: item.tls; width: 50px; color: white; font-size: 12px; vertical-alignment: center; }
-                                    // Delay
-                                    Text { text: item.latency; width: 60px; color: item.latency_color; font-size: 12px; vertical-alignment: center; font-weight: 600; }
-                                    
-                                    // Actions
+                                AppSectionCard {
+                                    title: "Application Behavior";
+                                    description: "Configure how the application runs on your system.";
                                     HorizontalBox {
-                                        width: 180px;
-                                        alignment: end;
-                                        spacing: 4px;
-                                        padding: 3px;
-                                        IconButton { icon: @image-url("power.svg"); tooltip_text: "Connect"; is_primary: true; clicked => { root.select_proxy(item.id); root.active_tab = 0; } }
-                                        IconButton { icon: @image-url("signal.svg"); tooltip_text: "Ping"; clicked => { root.ping_proxy(item.id); } }
-                                        IconButton { icon: @image-url("edit.svg"); tooltip_text: "Edit"; clicked => { root.open_edit_proxy(item.id); } }
-                                        IconButton { icon: @image-url("qr.svg"); tooltip_text: "QR"; clicked => { root.show_qr_for_proxy(item.id); } }
-                                        IconButton { icon: @image-url("copy.svg"); tooltip_text: "Export"; clicked => { root.export_proxy(item.id); } }
-                                        IconButton { icon: @image-url("layers.svg"); tooltip_text: "Dup"; clicked => { root.duplicate_proxy(item.id); } }
-                                        IconButton { icon: @image-url("trash.svg"); tooltip_text: "Del"; is_danger: true; clicked => { root.delete_proxy(item.id); } }
+                                        Text { text: "Autopilot Mode"; color: Theme.text-primary; vertical-alignment: center; font-size: Theme.font-body-large; }
+                                        Rectangle { horizontal-stretch: 1; }
+                                        PremiumSwitch { checked: root.autopilot_enabled; toggled => { root.set_autopilot(self.checked); } }
+                                    }
+                                    HorizontalBox {
+                                        Text { text: "Start on Boot"; color: Theme.text-primary; vertical-alignment: center; font-size: Theme.font-body-large; }
+                                        Rectangle { horizontal-stretch: 1; }
+                                        PremiumSwitch { checked <=> root.start_on_boot; toggled => { root.settings_changed(); } }
+                                    }
+                                }
+                                
+                                AppSectionCard {
+                                    title: "Appearance & Updates";
+                                    description: "Control visual preferences and update intervals.";
+                                    VerticalBox {
+                                        spacing: 8px;
+                                        Text { text: "Docking Position"; color: Theme.text-primary; font-size: Theme.font-body-large; }
+                                        Text { text: "Snap the client to a specific screen corner."; color: Theme.text-muted; font-size: Theme.font-sub; }
+                                        ComboBox { model: ["None", "Top Left", "Top Right", "Bottom Left", "Bottom Right"]; current-value <=> root.docking_position; selected => { root.settings_changed(); } }
+                                    }
+                                    VerticalBox {
+                                        spacing: 8px;
+                                        Text { text: "Auto-Update Geo Interval (Hours)"; color: Theme.text-primary; font-size: Theme.font-body-large; }
+                                        Text { text: "0 to disable automatic updates."; color: Theme.text-muted; font-size: Theme.font-sub; }
+                                        LineEdit { text <=> root.auto_update_geo; input-type: number; edited => { root.settings_changed(); } }
                                     }
                                 }
                             }
                         }
-                    }
-                    
-                    // SUBSCRIPTIONS SETTINGS
-                    if root.active_settings_tab == 3: VerticalBox {
-                        padding: 20px;
-                        spacing: 12px;
                         
-                        HorizontalBox {
-                            Text { text: "Subscriptions"; color: white; font-size: 20px; font-weight: 700; vertical-alignment: center; }
-                            Rectangle { horizontal-stretch: 1; }
-                            PremiumButton {
-                                text: root.is_updating_subs ? "Updating..." : "Update All";
-                                has_icon: true;
-                                icon: @image-url("refresh.svg");
-                                height: 32px;
-                                width: 120px;
-                                clicked => { root.update_subscriptions(false); }
-                            }
-                            PremiumButton {
-                                text: "Update via Proxy";
-                                has_icon: true;
-                                icon: @image-url("globe.svg");
-                                height: 32px;
-                                width: 160px;
-                                clicked => { root.update_subscriptions(true); }
-                            }
-                        }
-                        
-                        HorizontalBox {
-                            in-out property <string> new_sub: "";
-                            LineEdit {
-                                placeholder-text: "Paste subscription URL...";
-                                text <=> parent.new_sub;
-                                height: 36px;
-                            }
-                            PremiumButton {
-                                text: "Add";
-                                has_icon: true;
-                                icon: @image-url("edit.svg");
-                                height: 36px;
-                                width: 80px;
-                                clicked => {
-                                    root.add_subscription(parent.new_sub);
-                                    parent.new_sub = "";
+                        // V2RAY CORE SETTINGS
+                        if root.active_settings_tab == 1: PremiumScrollView {
+                            viewport_height: v2ray_content.preferred-height;
+                            v2ray_content := VerticalBox {
+                                padding: 30px; spacing: 24px; alignment: start;
+                                Text { text: "V2Ray Core Settings"; color: Theme.text-primary; font-size: Theme.font-title; font-weight: 700; }
+                                
+                                AppSectionCard {
+                                    title: "Connection Protocols";
+                                    description: "Core settings for outbound connections.";
+                                    VerticalBox {
+                                        spacing: 8px;
+                                        Text { text: "SOCKS Inbound Port"; color: Theme.text-primary; font-size: Theme.font-body-large; }
+                                        LineEdit { text <=> root.socks_port; edited => { root.settings_changed(); } }
+                                    }
+                                    VerticalBox {
+                                        spacing: 8px;
+                                        Text { text: "Log Level"; color: Theme.text-primary; font-size: Theme.font-body-large; }
+                                        ComboBox { model: ["debug", "info", "warning", "error", "none"]; current-value <=> root.log_level; selected => { root.settings_changed(); } }
+                                    }
+                                }
+                                
+                                AppSectionCard {
+                                    title: "Advanced Core Flags";
+                                    description: "Tweak deep core properties. Mux enables multiplexing to reduce handshake latency. UDP must be enabled for QUIC or gaming.";
+                                    HorizontalBox { Text { text: "Mux (Multiplexing)"; color: Theme.text-primary; vertical-alignment: center; font-size: Theme.font-body-large; } Rectangle { horizontal-stretch: 1; } PremiumSwitch { checked <=> root.mux_enabled; toggled => { root.settings_changed(); } } }
+                                    HorizontalBox { Text { text: "Enable UDP"; color: Theme.text-primary; vertical-alignment: center; font-size: Theme.font-body-large; } Rectangle { horizontal-stretch: 1; } PremiumSwitch { checked <=> root.enable_udp; toggled => { root.settings_changed(); } } }
+                                    HorizontalBox { Text { text: "Allow LAN Connections"; color: Theme.text-primary; vertical-alignment: center; font-size: Theme.font-body-large; } Rectangle { horizontal-stretch: 1; } PremiumSwitch { checked <=> root.allow_lan; toggled => { root.settings_changed(); } } }
+                                    HorizontalBox { Text { text: "Enable Sniffing (Domain Override)"; color: Theme.text-primary; vertical-alignment: center; font-size: Theme.font-body-large; } Rectangle { horizontal-stretch: 1; } PremiumSwitch { checked <=> root.enable_sniffing; toggled => { root.settings_changed(); } } }
+                                    HorizontalBox { Text { text: "Enable Fragment (SNI bypassing)"; color: Theme.text-primary; vertical-alignment: center; font-size: Theme.font-body-large; } Rectangle { horizontal-stretch: 1; } PremiumSwitch { checked <=> root.enable_fragment; toggled => { root.settings_changed(); } } }
                                 }
                             }
                         }
                         
-                        ListView {
-                            for item[index] in root.subscription_list: Rectangle {
-                                height: 110px;
-                                
+                        // CONFIGS SETTINGS
+                        if root.active_settings_tab == 2: VerticalBox {
+                            padding: 20px; spacing: 12px;
+                            
+                            HorizontalBox {
+                                Text { text: "Config Management"; color: Theme.text-primary; font-size: Theme.font-header; font-weight: 700; vertical-alignment: center; }
+                                Rectangle { horizontal-stretch: 1; }
+                                PremiumButton { text: "Ping All"; is_primary: false; has_icon: true; icon: @image-url("signal.svg"); width: 100px; clicked => { root.ping_all(); } }
+                                PremiumButton { text: "Delete All"; is_danger: true; has_icon: true; icon: @image-url("trash.svg"); width: 110px; clicked => { root.show_delete_all_modal = true; } }
+                            }
+                            
+                            HorizontalBox {
+                                spacing: 12px;
+                                GlassActionCard { horizontal-stretch: 1; title: "Import Clipboard"; subtitle: "Paste copied links"; icon: @image-url("copy.svg"); clicked => { root.import_proxy("clipboard"); } }
+                                GlassActionCard { horizontal-stretch: 1; title: "Scan QR"; subtitle: "From screen capture"; icon: @image-url("qr.svg"); clicked => {} }
+                                GlassActionCard { horizontal-stretch: 1; title: "Custom Config"; subtitle: "Manually build node"; icon: @image-url("edit.svg"); clicked => { root.open_edit_proxy(""); } }
+                            }
+                            
+                            HorizontalBox {
+                                in-out property <string> new_link: "";
+                                LineEdit { placeholder-text: "Paste vless://, wg://, or trojan:// link..."; text <=> parent.new_link; height: 36px; }
+                                PremiumButton {
+                                    text: "Add"; has_icon: true; icon: @image-url("edit.svg"); width: 80px;
+                                    enabled: root.is_valid_proxy_link(parent.new_link);
+                                    clicked => { root.import_proxy(parent.new_link); parent.new_link = ""; }
+                                }
+                            }
+                            
+                            // TABS FOR GROUPS
+                            HorizontalBox {
+                                spacing: 10px; height: 36px;
+                                for group in root.subscription_groups: PremiumButton { text: group; width: 100px; is_primary: root.filter_group == group; clicked => { root.filter_group = group; root.filter_changed(); } }
+                                Rectangle { horizontal-stretch: 1; }
+                            }
+                            
+                            if root.proxy_list.length == 0: EmptyState {
+                                title: "No Configurations Found";
+                                subtitle: "You haven't added any proxies yet. Import from clipboard, add a subscription, or manually build a config to get started.";
+                                icon: @image-url("layers.svg");
+                            }
+
+                            if root.proxy_list.length > 0: VerticalLayout {
+                                // GRID HEADER
                                 Rectangle {
-                                    height: 100px;
-                                    y: 5px;
-                                    border-radius: 12px;
-                                    background: #120024;
-                                    border-width: 1px;
-                                    border-color: #bf00ff22;
-                                    drop-shadow-blur: 5px;
-                                    drop-shadow-color: #000000;
-                                    
-                                    VerticalBox {
-                                        padding: 14px;
-                                        spacing: 8px;
-                                        
-                                        Text { text: item.url; color: white; font-size: 14px; font-weight: 600; overflow: elide; }
-                                        Text { text: "Last Updated: " + item.last_updated; color: #888; font-size: 11px; }
-                                        
-                                        Rectangle { vertical-stretch: 1; }
+                                    height: 30px; background: Theme.surface-hover; border-radius: Theme.radius-small;
+                                    HorizontalBox {
+                                        padding-left: 10px; padding-right: 10px; spacing: 5px;
+                                        Text { text: "Status"; width: 60px; color: Theme.text-secondary; font-size: Theme.font-sub; font-weight: 700; vertical-alignment: center; }
+                                        Text { text: "Type"; width: 60px; color: Theme.text-secondary; font-size: Theme.font-sub; font-weight: 700; vertical-alignment: center; }
+                                        Text { text: "Remarks"; width: 120px; color: Theme.text-secondary; font-size: Theme.font-sub; font-weight: 700; vertical-alignment: center; }
+                                        Text { text: "Address"; width: 140px; color: Theme.text-secondary; font-size: Theme.font-sub; font-weight: 700; vertical-alignment: center; }
+                                        Text { text: "Port"; width: 50px; color: Theme.text-secondary; font-size: Theme.font-sub; font-weight: 700; vertical-alignment: center; }
+                                        Text { text: "Transport"; width: 70px; color: Theme.text-secondary; font-size: Theme.font-sub; font-weight: 700; vertical-alignment: center; }
+                                        Text { text: "TLS"; width: 50px; color: Theme.text-secondary; font-size: Theme.font-sub; font-weight: 700; vertical-alignment: center; }
+                                        Text { text: "Delay"; width: 60px; color: Theme.text-secondary; font-size: Theme.font-sub; font-weight: 700; vertical-alignment: center; }
+                                        Text { text: "Actions"; width: 180px; color: Theme.text-secondary; font-size: Theme.font-sub; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; }
+                                    }
+                                }
+                                
+                                // GRID BODY
+                                ListView {
+                                    for item[index] in root.proxy_list: Rectangle {
+                                        height: 38px;
+                                        background: item.is_active ? Theme.success-bg : (index / 2 * 2 == index ? Theme.surface-raised : Theme.surface); // zebra striping
+                                        border-radius: Theme.radius-small;
                                         
                                         HorizontalBox {
-                                            alignment: end;
-                                            spacing: 8px;
-                                            IconButton { icon: @image-url("refresh.svg"); tooltip_text: "Refresh"; is_primary: true; clicked => { root.update_single_subscription(item.id); } }
-                                            IconButton { icon: @image-url("edit.svg"); tooltip_text: "Edit URL"; }
-                                            IconButton { icon: @image-url("trash.svg"); tooltip_text: "Delete Sub"; is_danger: true; clicked => { root.delete_subscription(item.id); } }
+                                            padding-left: 10px; padding-right: 10px; spacing: 5px;
+                                            
+                                            Rectangle { width: 60px; StatusBadge { is_active: item.is_active; text: item.is_active ? "Active" : "-"; y: (parent.height - self.height) / 2; } }
+                                            Text { text: item.protocol; width: 60px; color: Theme.text-primary; font-size: Theme.font-sub; vertical-alignment: center; }
+                                            Text { text: item.name; width: 120px; color: Theme.text-primary; font-size: Theme.font-sub; vertical-alignment: center; overflow: elide; }
+                                            Text { text: item.address; width: 140px; color: Theme.text-secondary; font-size: Theme.font-sub; vertical-alignment: center; overflow: elide; }
+                                            Text { text: item.port; width: 50px; color: Theme.text-primary; font-size: Theme.font-sub; vertical-alignment: center; }
+                                            Text { text: item.transport; width: 70px; color: Theme.text-primary; font-size: Theme.font-sub; vertical-alignment: center; }
+                                            Text { text: item.tls; width: 50px; color: Theme.text-primary; font-size: Theme.font-sub; vertical-alignment: center; }
+                                            Text { text: item.latency; width: 60px; color: item.latency_color; font-size: Theme.font-sub; vertical-alignment: center; font-weight: 600; }
+                                            
+                                            HorizontalBox {
+                                                width: 180px; alignment: end; spacing: 4px; padding: 3px;
+                                                IconButton { icon: @image-url("power.svg"); tooltip_text: "Connect"; is_primary: true; clicked => { root.select_proxy(item.id); root.active_tab = 0; } }
+                                                IconButton { icon: @image-url("signal.svg"); tooltip_text: "Ping"; clicked => { root.ping_proxy(item.id); } }
+                                                IconButton { icon: @image-url("edit.svg"); tooltip_text: "Edit"; clicked => { root.open_edit_proxy(item.id); } }
+                                                IconButton { icon: @image-url("qr.svg"); tooltip_text: "QR"; clicked => { root.show_qr_for_proxy(item.id); } }
+                                                IconButton { icon: @image-url("copy.svg"); tooltip_text: "Export"; clicked => { root.export_proxy(item.id); } }
+                                                IconButton { icon: @image-url("layers.svg"); tooltip_text: "Dup"; clicked => { root.duplicate_proxy(item.id); } }
+                                                IconButton { icon: @image-url("trash.svg"); tooltip_text: "Del"; is_danger: true; clicked => { root.delete_proxy_id = item.id; root.show_delete_proxy_modal = true; } }
+                                            }
                                         }
                                     }
                                 }
                             }
                         }
-                    }
-                    
-                    // ROUTING SETTINGS
-                    if root.active_settings_tab == 4: PremiumScrollView {
-                        viewport_height: route_content.preferred-height;
-                        route_content := VerticalBox {
-                            padding: 30px;
-                            spacing: 24px;
-                            alignment: start;
-                            Text { text: "Routing Setting"; color: white; font-size: 20px; font-weight: 700; }
+                        
+                        // SUBSCRIPTIONS SETTINGS
+                        if root.active_settings_tab == 3: VerticalBox {
+                            padding: 20px; spacing: 12px;
                             
-                            VerticalBox {
-                                spacing: 8px;
-                                Text { text: "System Proxy Exclusions (Bypass List)"; color: white; font-size: 16px; }
-                                Text { text: "Do not use proxy server for addresses beginning with the following. Use semicolon (;) to separate entries."; color: #888; font-size: 12px; }
-                                TextEdit {
-                                    text <=> root.bypass_list;
-                                    height: 120px;
-                                    edited => { root.settings_changed(); }
+                            HorizontalBox {
+                                Text { text: "Subscriptions"; color: Theme.text-primary; font-size: Theme.font-header; font-weight: 700; vertical-alignment: center; }
+                                Rectangle { horizontal-stretch: 1; }
+                                PremiumButton { text: root.is_updating_subs ? "Updating..." : "Update All"; enabled: !root.is_updating_subs; has_icon: true; icon: @image-url("refresh.svg"); width: 120px; clicked => { root.update_subscriptions(false); } }
+                                PremiumButton { text: "Update via Proxy"; enabled: !root.is_updating_subs; has_icon: true; icon: @image-url("globe.svg"); width: 160px; clicked => { root.update_subscriptions(true); } }
+                            }
+                            
+                            HorizontalBox {
+                                in-out property <string> new_sub: "";
+                                LineEdit { placeholder-text: "Paste http:// or https:// subscription URL..."; text <=> parent.new_sub; height: 36px; }
+                                PremiumButton {
+                                    text: "Add"; has_icon: true; icon: @image-url("edit.svg"); width: 80px;
+                                    enabled: root.is_valid_sub_link(parent.new_sub);
+                                    clicked => { root.add_subscription(parent.new_sub); parent.new_sub = ""; }
                                 }
                             }
                             
-                            PremiumButton { text: "Import Chocolate4U Routing rules"; has_icon: true; icon: @image-url("download.svg"); width: 280px; clicked => { root.download_routing_rules(); } }
+                            if root.subscription_list.length == 0: EmptyState {
+                                title: "No Subscriptions";
+                                subtitle: "Add a subscription URL to automatically fetch and update proxy configurations from your provider.";
+                                icon: @image-url("refresh.svg");
+                            }
+                            
+                            if root.subscription_list.length > 0: ListView {
+                                for item[index] in root.subscription_list: Rectangle {
+                                    height: 110px;
+                                    Rectangle {
+                                        height: 100px; y: 5px; border-radius: Theme.radius-large; background: Theme.surface-raised; border-width: 1px; border-color: Theme.border;
+                                        VerticalBox {
+                                            padding: 14px; spacing: 8px;
+                                            Text { text: item.url; color: Theme.text-primary; font-size: Theme.font-body; font-weight: 600; overflow: elide; }
+                                            Text { text: "Last Updated: " + item.last_updated; color: Theme.text-muted; font-size: Theme.font-sub; }
+                                            Rectangle { vertical-stretch: 1; }
+                                            HorizontalBox {
+                                                alignment: end; spacing: 8px;
+                                                IconButton { icon: @image-url("refresh.svg"); tooltip_text: "Refresh"; is_primary: true; enabled: !root.is_updating_subs; clicked => { root.update_single_subscription(item.id); } }
+                                                IconButton { icon: @image-url("edit.svg"); tooltip_text: "Edit URL"; }
+                                                IconButton { icon: @image-url("trash.svg"); tooltip_text: "Delete Sub"; is_danger: true; clicked => { root.delete_sub_id = item.id; root.show_delete_sub_modal = true; } }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
-                    }
-                    
-                    // DNS SETTINGS
-                    if root.active_settings_tab == 5: PremiumScrollView {
-                        viewport_height: dns_content.preferred-height;
-                        dns_content := VerticalBox {
-                            padding: 30px;
-                            spacing: 24px;
-                            alignment: start;
-                            Text { text: "DNS Settings"; color: white; font-size: 20px; font-weight: 700; }
+                        
+                        // ROUTING SETTINGS
+                        if root.active_settings_tab == 4: PremiumScrollView {
+                            viewport_height: route_content.preferred-height;
+                            route_content := VerticalBox {
+                                padding: 30px; spacing: 24px; alignment: start;
+                                Text { text: "Routing Settings"; color: Theme.text-primary; font-size: Theme.font-title; font-weight: 700; }
+                                
+                                AppSectionCard {
+                                    title: "System Proxy Exclusions (Bypass List)";
+                                    description: "Do not use proxy server for addresses beginning with the following. Use semicolon (;) to separate entries.";
+                                    TextEdit { text <=> root.bypass_list; height: 120px; edited => { root.settings_changed(); } }
+                                }
+                                
+                                AppSectionCard {
+                                    title: "Routing Rulesets";
+                                    description: "Download extensive geosite and geoip dat files for proper routing algorithms.";
+                                    PremiumButton { text: "Import Chocolate4U Routing rules"; has_icon: true; icon: @image-url("download.svg"); width: 280px; clicked => { root.download_routing_rules(); } }
+                                }
+                            }
+                        }
+                        
+                        // DNS SETTINGS
+                        if root.active_settings_tab == 5: PremiumScrollView {
+                            viewport_height: dns_content.preferred-height;
+                            dns_content := VerticalBox {
+                                padding: 30px; spacing: 24px; alignment: start;
+                                Text { text: "DNS Settings"; color: Theme.text-primary; font-size: Theme.font-title; font-weight: 700; }
+                                
+                                AppSectionCard {
+                                    title: "Nameservers";
+                                    description: "Define fallback and remote nameservers for DNS queries.";
+                                    AppTextField { label: "Domestic DNS"; text <=> root.domestic_dns; }
+                                    AppTextField { label: "Remote DNS"; text <=> root.remote_dns; }
+                                    AppTextField { label: "Bootstrap DNS"; text <=> root.bootstrap_dns; }
+                                }
+                                
+                                AppSectionCard {
+                                    title: "Advanced DNS Behaviours";
+                                    description: "Enable FakeIP for faster domain resolution mapping, and SVCB blocking for compatibility.";
+                                    HorizontalBox { Text { text: "Add Common DNS Hosts"; color: Theme.text-primary; vertical-alignment: center; font-size: Theme.font-body-large; } Rectangle { horizontal-stretch: 1; } PremiumSwitch { checked <=> root.add_common_dns; toggled => { root.settings_changed(); } } }
+                                    HorizontalBox { Text { text: "FakeIP"; color: Theme.text-primary; vertical-alignment: center; font-size: Theme.font-body-large; } Rectangle { horizontal-stretch: 1; } PremiumSwitch { checked <=> root.enable_fakeip; toggled => { root.settings_changed(); } } }
+                                    HorizontalBox { Text { text: "Block SVCB and HTTPS Queries"; color: Theme.text-primary; vertical-alignment: center; font-size: Theme.font-body-large; } Rectangle { horizontal-stretch: 1; } PremiumSwitch { checked <=> root.block_svcb; toggled => { root.settings_changed(); } } }
+                                }
+                                
+                                AppSectionCard {
+                                    title: "DNS Overrides";
+                                    description: "Define static domain-to-IP mappings, or use a complete JSON string to override all DNS behaviors.";
+                                    VerticalBox { spacing: 8px; Text { text: "DNS Hosts (domain IP per line)"; color: Theme.text-primary; font-size: Theme.font-body-large; } TextEdit { text <=> root.dns_hosts; height: 100px; edited => { root.settings_changed(); } } }
+                                    VerticalBox { spacing: 8px; Text { text: "Custom DNS Object (JSON)"; color: Theme.text-primary; font-size: Theme.font-body-large; } TextEdit { text <=> root.custom_dns_json; height: 120px; edited => { root.settings_changed(); } } }
+                                }
+                            }
+                        }
+                        
+                        // LOGS SETTINGS
+                        if root.active_settings_tab == 6: VerticalBox {
+                            padding: 20px; spacing: 12px;
                             
-                            // Basic DNS
-                            VerticalBox {
-                                spacing: 8px;
-                                Text { text: "Domestic DNS"; color: white; font-size: 16px; }
-                                LineEdit { text <=> root.domestic_dns; edited => { root.settings_changed(); } }
-                            }
-                            VerticalBox {
-                                spacing: 8px;
-                                Text { text: "Remote DNS"; color: white; font-size: 16px; }
-                                LineEdit { text <=> root.remote_dns; edited => { root.settings_changed(); } }
-                            }
-                            VerticalBox {
-                                spacing: 8px;
-                                Text { text: "Bootstrap DNS"; color: white; font-size: 16px; }
-                                LineEdit { text <=> root.bootstrap_dns; edited => { root.settings_changed(); } }
-                            }
-                            
-                            // Advanced DNS
                             HorizontalBox {
-                                Text { text: "Add Common DNS Hosts"; color: white; vertical-alignment: center; font-size: 16px; }
+                                alignment: start;
+                                VerticalBox {
+                                    Text { text: "System Logs"; color: Theme.text-primary; font-size: Theme.font-header; font-weight: 700; }
+                                    Text { text: "Real-time output from the core and app backend."; color: Theme.text-muted; font-size: Theme.font-body; }
+                                }
                                 Rectangle { horizontal-stretch: 1; }
-                                PremiumSwitch { checked <=> root.add_common_dns; toggled => { root.settings_changed(); } }
-                            }
-                            HorizontalBox {
-                                Text { text: "FakeIP"; color: white; vertical-alignment: center; font-size: 16px; }
-                                Rectangle { horizontal-stretch: 1; }
-                                PremiumSwitch { checked <=> root.enable_fakeip; toggled => { root.settings_changed(); } }
-                            }
-                            HorizontalBox {
-                                Text { text: "Block SVCB and HTTPS Queries"; color: white; vertical-alignment: center; font-size: 16px; }
-                                Rectangle { horizontal-stretch: 1; }
-                                PremiumSwitch { checked <=> root.block_svcb; toggled => { root.settings_changed(); } }
+                                PremiumButton { text: "Clear Logs"; has_icon: true; icon: @image-url("trash.svg"); width: 130px; is_danger: true; clicked => { root.clear_logs(); } }
                             }
                             
-                            // Hosts
-                            VerticalBox {
-                                spacing: 8px;
-                                Text { text: "DNS Hosts (domain IP per line)"; color: white; font-size: 16px; }
-                                TextEdit { text <=> root.dns_hosts; height: 100px; edited => { root.settings_changed(); } }
+                            if root.app_logs == "": EmptyState {
+                                title: "No Logs Available";
+                                subtitle: "The core engine has not emitted any log events yet. Try connecting to a proxy or pinging.";
+                                icon: @image-url("data.svg");
                             }
                             
-                            // Custom JSON
-                            VerticalBox {
-                                spacing: 8px;
-                                Text { text: "Custom DNS Object (JSON)"; color: white; font-size: 16px; }
-                                Text { text: "If specified, overrides all other DNS settings."; color: #888; font-size: 12px; }
-                                TextEdit { text <=> root.custom_dns_json; height: 120px; edited => { root.settings_changed(); } }
+                            if root.app_logs != "": Rectangle {
+                                vertical-stretch: 1;
+                                background: Theme.surface;
+                                border-radius: Theme.radius-medium;
+                                border-width: 1px;
+                                border-color: Theme.border;
+                                
+                                Flickable {
+                                    viewport-height: log_text.preferred-height;
+                                    width: 100%; height: 100%;
+                                    log_text := Text {
+                                        text: root.app_logs;
+                                        color: Theme.text-accent;
+                                        font-family: "Courier New"; // monospace
+                                        font-size: Theme.font-sub;
+                                        wrap: word-wrap;
+                                        x: 12px; y: 12px; width: parent.width - 24px;
+                                    }
+                                }
                             }
                         }
                     }
                 }
-                    // LOGS SETTINGS
-                    if root.active_settings_tab == 6: VerticalBox {
-                        padding: 20px;
-                        spacing: 12px;
-                        
-                        HorizontalBox {
-                            alignment: start;
-                            VerticalBox {
-                                Text { text: "System Logs"; color: white; font-size: 20px; font-weight: 700; }
-                                Text { text: "Real-time output from the Xray core and app backend."; color: #888; font-size: 14px; }
-                            }
-                            Rectangle { horizontal-stretch: 1; }
-                            PremiumButton { text: "Clear Logs"; has_icon: true; icon: @image-url("trash.svg"); width: 130px; is_danger: true; clicked => { root.clear_logs(); } }
-                        }
-                        
-                        Rectangle {
-                            vertical-stretch: 1;
-                            background: #0A0010;
-                            border-radius: 8px;
-                            border-width: 1px;
-                            border-color: #ffffff11;
-                            
-                            Flickable {
-                                viewport-height: log_text.preferred-height;
-                                width: 100%;
-                                height: 100%;
-                                
-                                log_text := Text {
-                                    text: root.app_logs;
-                                    color: #00e5ff;
-                                    font-size: 12px;
-                                    wrap: word-wrap;
-                                    x: 8px;
-                                    y: 8px;
-                                    width: parent.width - 16px;
-                                }
-                            }
-                        }
-                    }
+            }
+        }
+        
+        // Modals Layer
+        ModalShell {
+            title: "Proxy QR Code";
+            is_open: root.show_qr_modal;
+            close_clicked => { root.close_qr_modal(); }
+            
+            VerticalLayout {
+                spacing: 16px;
+                alignment: center;
+                Text { text: "Scan this code with a mobile client to import the proxy configuration quickly."; color: Theme.text-muted; font-size: Theme.font-body; wrap: word-wrap; }
+                Rectangle {
+                    width: 240px; height: 240px; border-radius: Theme.radius-medium; background: white;
+                    Image { source: root.qr_image_data; width: 220px; height: 220px; x: 10px; y: 10px; }
+                }
+                PremiumButton { text: "Done"; is_primary: true; clicked => { root.close_qr_modal(); } }
+            }
+        }
+        
+        ModalShell {
+            title: "Edit Proxy Link";
+            is_open: root.show_edit_modal;
+            close_clicked => { root.close_edit_modal(); }
+            
+            VerticalLayout {
+                spacing: 16px;
+                AppTextField { label: "Remarks"; text <=> root.edit_proxy_name; }
+                AppTextField { label: "Proxy Link URL"; text <=> root.edit_proxy_link; placeholder_text: "vless://... or trojan://..."; }
+                
+                HorizontalLayout {
+                    spacing: 12px;
+                    PremiumButton { text: "Cancel"; is_primary: false; horizontal-stretch: 1; clicked => { root.close_edit_modal(); } }
+                    PremiumButton { text: "Save"; is_primary: true; horizontal-stretch: 1; enabled: root.is_valid_proxy_link(root.edit_proxy_link) && root.edit_proxy_name != ""; clicked => { root.save_edit_proxy(); root.close_edit_modal(); } }
+                }
+            }
+        }
+        
+        ModalShell {
+            title: "Delete Proxy";
+            is_open: root.show_delete_proxy_modal;
+            close_clicked => { root.show_delete_proxy_modal = false; }
+            
+            VerticalLayout {
+                spacing: 16px;
+                Text { text: "Are you sure you want to delete this configuration? This action cannot be undone."; color: Theme.text-muted; font-size: Theme.font-body; wrap: word-wrap; }
+                HorizontalLayout {
+                    spacing: 12px;
+                    PremiumButton { text: "Cancel"; is_primary: false; horizontal-stretch: 1; clicked => { root.show_delete_proxy_modal = false; } }
+                    PremiumButton { text: "Delete"; is_danger: true; horizontal-stretch: 1; clicked => { root.delete_proxy(root.delete_proxy_id); root.show_delete_proxy_modal = false; } }
+                }
+            }
+        }
+
+        ModalShell {
+            title: "Delete All Proxies";
+            is_open: root.show_delete_all_modal;
+            close_clicked => { root.show_delete_all_modal = false; }
+            
+            VerticalLayout {
+                spacing: 16px;
+                Text { text: "Are you sure you want to delete ALL configurations? This will wipe your list."; color: Theme.text-muted; font-size: Theme.font-body; wrap: word-wrap; }
+                HorizontalLayout {
+                    spacing: 12px;
+                    PremiumButton { text: "Cancel"; is_primary: false; horizontal-stretch: 1; clicked => { root.show_delete_all_modal = false; } }
+                    PremiumButton { text: "Delete All"; is_danger: true; horizontal-stretch: 1; clicked => { root.delete_all_proxies(); root.show_delete_all_modal = false; } }
+                }
+            }
+        }
+
+        ModalShell {
+            title: "Delete Subscription";
+            is_open: root.show_delete_sub_modal;
+            close_clicked => { root.show_delete_sub_modal = false; }
+            
+            VerticalLayout {
+                spacing: 16px;
+                Text { text: "Are you sure you want to remove this subscription? You will stop receiving updates for it."; color: Theme.text-muted; font-size: Theme.font-body; wrap: word-wrap; }
+                HorizontalLayout {
+                    spacing: 12px;
+                    PremiumButton { text: "Cancel"; is_primary: false; horizontal-stretch: 1; clicked => { root.show_delete_sub_modal = false; } }
+                    PremiumButton { text: "Delete"; is_danger: true; horizontal-stretch: 1; clicked => { root.delete_subscription(root.delete_sub_id); root.show_delete_sub_modal = false; } }
                 }
             }
         }

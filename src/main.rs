@@ -20,6 +20,26 @@ async fn main() -> Result<(), slint::PlatformError> {
     let ui = MainWindow::new()?;
     let ui_handle = ui.as_weak();
     
+    ui.on_is_valid_proxy_link(|link| {
+        let link_str = link.to_string();
+        !link_str.is_empty() && (
+            link_str.starts_with("vless://") || 
+            link_str.starts_with("vmess://") || 
+            link_str.starts_with("trojan://") || 
+            link_str.starts_with("ss://") || 
+            link_str.starts_with("ssr://") || 
+            link_str.starts_with("wg://") || 
+            link_str.starts_with("socks://") || 
+            link_str.starts_with("http://") || 
+            link_str.starts_with("https://")
+        )
+    });
+
+    ui.on_is_valid_sub_link(|link| {
+        let link_str = link.to_string();
+        !link_str.is_empty() && (link_str.starts_with("http://") || link_str.starts_with("https://"))
+    });
+    
     let proxy_runner = Arc::new(TokioMutex::new(proxy::ProxyRunner::new()));
     let autopilot_active = Arc::new(AtomicBool::new(false));
 
