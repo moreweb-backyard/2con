@@ -792,10 +792,13 @@ async fn main() -> Result<(), slint::PlatformError> {
                         
                         if let Err(e) = runner.start(xray_cfg, log_tx).await {
                             eprintln!("Error starting proxy: {}", e);
+                            let e_clone = e.clone();
                             slint::invoke_from_event_loop(move || {
                                 if let Some(u) = ui_clone.upgrade() {
                                     u.set_connected(false);
                                     u.set_current_ip("Error Starting Xray".into());
+                                    let current = u.get_app_logs();
+                                    u.set_app_logs(format!("{}[ERROR] Failed to start proxy: {}\n", current, e_clone).into());
                                 }
                             }).unwrap();
                             return;
@@ -817,6 +820,10 @@ async fn main() -> Result<(), slint::PlatformError> {
                             }
                         }).unwrap();
                     });
+                } else {
+                    let current = ui.get_app_logs();
+                    ui.set_app_logs(format!("{}[ERROR] Protocol not supported or invalid proxy link: {}\n", current, profile.name).into());
+                    ui.set_connected(false);
                 }
             }
         }
@@ -966,34 +973,53 @@ async fn main() -> Result<(), slint::PlatformError> {
                 let mut new_profiles = Vec::new();
                 use base64::Engine;
                 
-                if let Ok(resp) = reqwest::get(&url).await {
-                    if let Ok(text) = resp.text().await {
-                        if let Ok(decoded) = base64::engine::general_purpose::STANDARD.decode(text.trim()) {
-                            if let Ok(decoded_str) = String::from_utf8(decoded) {
-                                for line in decoded_str.lines() {
-                                    let line = line.trim();
-                                    if line.is_empty() { continue; }
-                                    
-                                    if let Some(parsed) = config::ProxyConfig::parse(line) {
-                                        let pid = uuid::Uuid::new_v4().to_string();
-                                        let name = if let Some(idx) = line.find('#') {
-                                            line[idx+1..].to_string()
-                                        } else {
-                                            parsed.hostname.clone()
-                                        };
-                                        
-                                        new_profiles.push(config::Profile {
-                                            id: pid,
-                                            name: format!("[Sub] {}", name),
-                                            protocol: parsed.protocol,
-                                            raw_link: line.to_string(),
-                                            sub_group: url.clone(),
-                                        });
-                                    }
-                                }
-                            }
+                let mut success = false;
+                let mut err_msg = String::new();
+                match reqwest::get(&url).await {
+                    Ok(resp) => {
+                        match resp.text().await {
+                            Ok(text) => {
+                                if let Ok(decoded) = base64::engine::general_purpose::STANDARD.decode(text.trim()) {
+                                    if let Ok(decoded_str) = String::from_utf8(decoded) {
+                                        for line in decoded_str.lines() {
+                                            let line = line.trim();
+                                            if line.is_empty() { continue; }
+                                            
+                                            if let Some(parsed) = config::ProxyConfig::parse(line) {
+                                                let pid = uuid::Uuid::new_v4().to_string();
+                                                let name = if let Some(idx) = line.find('#') {
+                                                    line[idx+1..].to_string()
+                                                } else {
+                                                    parsed.hostname.clone()
+                                                };
+                                                
+                                                new_profiles.push(config::Profile {
+                                                    id: pid,
+                                                    name: format!("[Sub] {}", name),
+                                                    protocol: parsed.protocol,
+                                                    raw_link: line.to_string(),
+                                                    sub_group: url.clone(),
+                                                });
+                                            }
+                                        }
+                                        success = true;
+                                    } else { err_msg = "Invalid UTF-8 in subscription".into(); }
+                                } else { err_msg = "Failed to decode Base64 subscription".into(); }
+                            },
+                            Err(e) => { err_msg = format!("Failed to read response: {}", e); }
                         }
-                    }
+                    },
+                    Err(e) => { err_msg = format!("HTTP request failed: {}", e); }
+                }
+                
+                if !success {
+                    let ui_weak_clone = ui_weak.clone();
+                    let _ = slint::invoke_from_event_loop(move || {
+                        if let Some(u) = ui_weak_clone.upgrade() {
+                            let current = u.get_app_logs();
+                            u.set_app_logs(format!("{}[ERROR] Subscription fetch failed: {}\n", current, err_msg).into());
+                        }
+                    });
                 }
                 
                 {
@@ -1089,62 +1115,6 @@ async fn main() -> Result<(), slint::PlatformError> {
         }
     });
 
-    // 8. Mock Network Metrics
-    let ui_metrics = ui.as_weak();
-    tokio::spawn(async move {
-        let mut upload_total: u64 = 0;
-        let mut download_total: u64 = 0;
-        
-        loop {
-            tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-            
-            let (up_speed_kb, dl_speed_kb) = {
-                use rand::Rng;
-                let mut rng = rand::thread_rng();
-                (rng.gen_range(10..2500), rng.gen_range(50..15000))
-            };
-            
-            upload_total += up_speed_kb as u64;
-            download_total += dl_speed_kb as u64;
-            
-            let up_str = if up_speed_kb > 1024 {
-                format!("{:.1} MB/s", up_speed_kb as f64 / 1024.0)
-            } else {
-                format!("{} KB/s", up_speed_kb)
-            };
-            
-            let dl_str = if dl_speed_kb > 1024 {
-                format!("{:.1} MB/s", dl_speed_kb as f64 / 1024.0)
-            } else {
-                format!("{} KB/s", dl_speed_kb)
-            };
-            
-            let total_mb = (upload_total + download_total) / 1024;
-            let total_str = if total_mb > 1024 {
-                format!("{:.2} GB", total_mb as f64 / 1024.0)
-            } else {
-                format!("{} MB", total_mb)
-            };
-            
-            slint::invoke_from_event_loop({
-                let ui_weak = ui_metrics.clone();
-                move || {
-                    if let Some(u) = ui_weak.upgrade() {
-                        if u.get_connected() {
-                            u.set_upload_speed(up_str.into());
-                            u.set_download_speed(dl_str.into());
-                            u.set_total_data(total_str.into());
-                            u.set_ip_country("Germany".into());
-                        } else {
-                            u.set_upload_speed("0 B/s".into());
-                            u.set_download_speed("0 B/s".into());
-                            u.set_ip_country("Unknown".into());
-                        }
-                    }
-                }
-            }).unwrap();
-        }
-    });
 
     // 9. Icon Suite Handlers
     let profiles_export = profiles.clone();

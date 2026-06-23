@@ -82,36 +82,6 @@ pub async fn download_routing_rules() -> Result<(), String> {
     Ok(())
 }
 
-pub fn enable_system_proxy(port: u16, bypass_list: &str) {
-    if cfg!(target_os = "windows") {
-        let cmd1 = "reg add \"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings\" /v ProxyEnable /t REG_DWORD /d 1 /f";
-        let cmd2 = format!("reg add \"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings\" /v ProxyServer /t REG_SZ /d \"127.0.0.1:{}\" /f", port);
-        
-        // Use standard Windows proxy bypass syntax: localhost;127.*;<local> 
-        // We ensure <local> is appended so intranet is skipped if allowed.
-        let mut bypass = bypass_list.to_string();
-        if !bypass.contains("<local>") {
-            bypass = format!("{};<local>", bypass);
-        }
-        let cmd3 = format!("reg add \"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings\" /v ProxyOverride /t REG_SZ /d \"{}\" /f", bypass);
-        
-        let _ = std::process::Command::new("cmd").args(["/C", cmd1]).output();
-        let _ = std::process::Command::new("cmd").args(["/C", &cmd2]).output();
-        let _ = std::process::Command::new("cmd").args(["/C", &cmd3]).output();
-        
-        // Notify system of setting change (we don't strictly bind InternetSetOption yet, but restarting browser/app triggers it)
-    }
-}
-
-pub fn disable_system_proxy() {
-    if cfg!(target_os = "windows") {
-        let cmd1 = "reg add \"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings\" /v ProxyEnable /t REG_DWORD /d 0 /f";
-        let cmd2 = "reg delete \"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings\" /v ProxyOverride /f";
-        let _ = std::process::Command::new("cmd").args(["/C", cmd1]).output();
-        let _ = std::process::Command::new("cmd").args(["/C", cmd2]).output();
-    }
-}
-
 pub struct ProxyRunner {
     child: Option<Child>,
 }
@@ -168,25 +138,11 @@ impl ProxyRunner {
         }
 
         self.child = Some(child);
-        
-        // Attempt to extract http port from config to set system proxy
-        if let Some(inbounds) = config.get("inbounds").and_then(|i| i.as_array()) {
-            for inbound in inbounds {
-                if inbound.get("protocol").and_then(|p| p.as_str()) == Some("http") {
-                    if let Some(port) = inbound.get("port").and_then(|p| p.as_u64()) {
-                        let settings = crate::config::load_settings();
-                        enable_system_proxy(port as u16, &settings.bypass_list);
-                        break;
-                    }
-                }
-            }
-        }
-        
+
         Ok(())
     }
 
     pub async fn stop(&mut self) {
-        disable_system_proxy();
         if let Some(mut child) = self.child.take() {
             let _ = child.kill().await;
         }
@@ -287,28 +243,6 @@ pub fn generate_xray_config(protocol: &str, address: &str, port: u16, uuid: &str
         "settings": settings,
         "streamSettings": stream_settings
     });
-
-    if app_settings.enable_fragment {
-        outbound.as_object_mut().unwrap().insert("mux".to_string(), json!({
-            "enabled": false
-        })); // Mux and fragment might conflict, but we just insert stream configuration
-        if let Some(stream) = outbound.get_mut("streamSettings") {
-            if let Some(sock_opts) = stream.as_object_mut().unwrap().get_mut("sockopt") {
-                // Not standard Xray but some forks support this in sockopt
-            }
-        }
-        // Actually, Xray standard fragment is placed under streamSettings -> sockopt -> dialerProxy
-        // or as an outbound protocol itself. The screenshot shows sing-box ruleset / hysteria bandwidth / enable fragment.
-        // We will enable standard Xray TLS fragment if protocol is vless/trojan with TLS.
-        if stream_settings.get("security").and_then(|v| v.as_str()) == Some("tls") || stream_settings.get("security").and_then(|v| v.as_str()) == Some("reality") {
-            if let Some(stream) = outbound.get_mut("streamSettings") {
-                stream.as_object_mut().unwrap().insert("sockopt".to_string(), json!({
-                    "dialerProxy": "fragment",
-                    "tcpKeepAliveInterval": 15
-                }));
-            }
-        }
-    }
 
     if app_settings.mux_enabled && !app_settings.enable_fragment {
         outbound.as_object_mut().unwrap().insert("mux".to_string(), json!({

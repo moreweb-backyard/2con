@@ -50,15 +50,6 @@ export component PremiumButton inherits Rectangle {
         }
     }
 
-    touch := TouchArea {
-        width: 100%;
-        height: 100%;
-        clicked => { 
-            if (root.enabled) {
-                root.clicked();
-            }
-        }
-    }
     focus_scope := FocusScope {
         key-pressed(e) => {
             if (e.text == " " || e.text == "\n") {
@@ -66,6 +57,16 @@ export component PremiumButton inherits Rectangle {
                 return accept;
             }
             return reject;
+        }
+    }
+
+    touch := TouchArea {
+        width: 100%;
+        height: 100%;
+        clicked => { 
+            if (root.enabled) {
+                root.clicked();
+            }
         }
     }
 }
@@ -94,17 +95,6 @@ export component PremiumSwitch inherits Rectangle {
         animate x { duration: 200ms; easing: ease-in-out; }
     }
 
-    touch := TouchArea {
-        width: 100%;
-        height: 100%;
-        clicked => { 
-            if (root.enabled) {
-                root.checked = !root.checked;
-                root.toggled();
-            }
-        }
-    }
-    
     focus_scope := FocusScope {
         key-pressed(e) => {
             if (e.text == " " || e.text == "\n") {
@@ -115,6 +105,17 @@ export component PremiumSwitch inherits Rectangle {
                 return accept;
             }
             return reject;
+        }
+    }
+
+    touch := TouchArea {
+        width: 100%;
+        height: 100%;
+        clicked => { 
+            if (root.enabled) {
+                root.checked = !root.checked;
+                root.toggled();
+            }
         }
     }
 }
@@ -155,16 +156,6 @@ export component IconButton inherits Rectangle {
         animate colorize { duration: 150ms; }
     }
 
-    touch := TouchArea {
-        width: 100%;
-        height: 100%;
-        clicked => { 
-            if (root.enabled) {
-                root.clicked();
-            }
-        }
-    }
-    
     focus_scope := FocusScope {
         key-pressed(e) => {
             if (e.text == " " || e.text == "\n") {
@@ -172,6 +163,13 @@ export component IconButton inherits Rectangle {
                 return accept;
             }
             return reject;
+        }
+    }
+
+    touch := TouchArea {
+        width: 100%; height: 100%;
+        clicked => { 
+            if (root.enabled) { root.clicked(); }
         }
     }
     
@@ -206,13 +204,11 @@ export component SidebarItem inherits Rectangle {
     callback clicked();
 
     height: 36px;
-    border-radius: Theme.radius-medium;
     forward-focus: focus_scope;
     
     background: is_active ? Theme.surface-raised : (touch.has-hover ? Theme.surface-hover : transparent);
     
-    border-width: focus_scope.has-focus ? Theme.focus-ring-width : 0px;
-    border-color: Theme.focus-ring;
+    border-width: 0px;
     
     animate background { duration: 150ms; }
 
@@ -221,18 +217,12 @@ export component SidebarItem inherits Rectangle {
         color: is_active ? Theme.text-accent : (touch.has-hover ? Theme.text-primary : Theme.text-secondary);
         font-size: Theme.font-body;
         font-weight: is_active ? 700 : 500;
-        x: 16px;
+        x: 8px;
         vertical-alignment: center;
         height: 100%;
         animate color { duration: 150ms; }
     }
 
-    touch := TouchArea {
-        width: 100%;
-        height: 100%;
-        clicked => { root.clicked() }
-    }
-    
     focus_scope := FocusScope {
         key-pressed(e) => {
             if (e.text == " " || e.text == "\n") {
@@ -241,6 +231,11 @@ export component SidebarItem inherits Rectangle {
             }
             return reject;
         }
+    }
+
+    touch := TouchArea {
+        width: 100%; height: 100%;
+        clicked => { root.clicked() }
     }
 }
 
@@ -320,14 +315,13 @@ export component AppSectionCard inherits Rectangle {
     in property <string> title;
     in property <string> description;
     
-    background: Theme.surface;
-    border-radius: Theme.radius-large;
-    border-width: 1px;
-    border-color: Theme.border;
+    background: transparent;
+    border-width: 0px;
     
     VerticalLayout {
-        padding: 20px;
-        spacing: 16px;
+        padding-top: 10px;
+        padding-bottom: 20px;
+        spacing: 12px;
         
         VerticalLayout {
             spacing: 4px;
@@ -335,9 +329,12 @@ export component AppSectionCard inherits Rectangle {
             if description != "": Text { text: root.description; color: Theme.text-muted; font-size: Theme.font-sub; wrap: word-wrap; }
         }
         
-        Rectangle { height: 1px; background: Theme.border; }
+        Rectangle { height: 1px; background: Theme.surface-raised; }
         
-        @children
+        VerticalLayout {
+            spacing: 12px;
+            @children
+        }
     }
 }
 

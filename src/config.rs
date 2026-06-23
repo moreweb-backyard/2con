@@ -57,16 +57,16 @@ impl ProxyConfig {
             // ss:// links often look like ss://BASE64@host:port#name
             // or ss://BASE64#name where BASE64 = method:password@host:port
             
-            let mut host_part = "";
-            let mut port_part = "";
-            let mut method_pass = "";
+            let mut host_part = String::new();
+            let mut port_part = String::new();
+            let mut method_pass = String::new();
             
             if let Some(at_idx) = link.find('@') {
                 // ss://BASE64@host:port#name
                 let b64 = &link[5..at_idx];
                 if let Ok(decoded) = base64::engine::general_purpose::STANDARD.decode(b64) {
                     if let Ok(decoded_str) = String::from_utf8(decoded) {
-                        method_pass = Box::leak(decoded_str.into_boxed_str());
+                        method_pass = decoded_str;
                     }
                 }
                 
@@ -75,8 +75,8 @@ impl ProxyConfig {
                 let host_port = &remainder[..end_idx];
                 
                 if let Some(colon) = host_port.rfind(':') {
-                    host_part = &host_port[..colon];
-                    port_part = &host_port[colon+1..];
+                    host_part = host_port[..colon].to_string();
+                    port_part = host_port[colon+1..].to_string();
                 }
             } else {
                 // ss://BASE64#name
@@ -85,11 +85,11 @@ impl ProxyConfig {
                 if let Ok(decoded) = base64::engine::general_purpose::STANDARD.decode(b64) {
                     if let Ok(decoded_str) = String::from_utf8(decoded) {
                         if let Some(at_idx) = decoded_str.rfind('@') {
-                            method_pass = Box::leak(decoded_str[..at_idx].to_string().into_boxed_str());
+                            method_pass = decoded_str[..at_idx].to_string();
                             let host_port = &decoded_str[at_idx+1..];
                             if let Some(colon) = host_port.rfind(':') {
-                                host_part = Box::leak(host_port[..colon].to_string().into_boxed_str());
-                                port_part = Box::leak(host_port[colon+1..].to_string().into_boxed_str());
+                                host_part = host_port[..colon].to_string();
+                                port_part = host_port[colon+1..].to_string();
                             }
                         }
                     }
@@ -99,9 +99,9 @@ impl ProxyConfig {
             if !host_part.is_empty() && !port_part.is_empty() {
                 return Some(ProxyConfig {
                     protocol: "shadowsocks".to_string(),
-                    addresses: vec![host_part.to_string()],
+                    addresses: vec![host_part],
                     port: port_part.parse().unwrap_or(443),
-                    uuid: method_pass.to_string(), // we use uuid to store method:password for simplicity
+                    uuid: method_pass, // we use uuid to store method:password for simplicity
                     hostname: "".to_string(),
                     path: "".to_string(),
                     tls: "".to_string(),
