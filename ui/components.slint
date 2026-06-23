@@ -12,6 +12,7 @@ export component PremiumButton inherits Rectangle {
 
     height: 36px;
     border-radius: Theme.radius-medium;
+    forward-focus: focus_scope;
     
     // States: disabled, pressed, hover, default
     background: !root.enabled ? Theme.disabled : (
@@ -22,11 +23,11 @@ export component PremiumButton inherits Rectangle {
         )
     );
     
-    border-width: false ? Theme.focus-ring-width : 0px;
+    border-width: focus_scope.has-focus ? Theme.focus-ring-width : 0px;
     border-color: Theme.focus-ring;
     
-    drop-shadow-color: !root.enabled ? transparent : (is_primary ? #bf00ff44 : transparent);
-    drop-shadow-blur: touch.has-hover && root.enabled ? 10px : 0px;
+    drop-shadow-color: !root.enabled ? transparent : (is_primary ? #bf00ff22 : transparent);
+    drop-shadow-blur: touch.has-hover && root.enabled ? 4px : 0px;
     
     animate background, drop-shadow-blur, border-width { duration: 150ms; }
     
@@ -58,6 +59,15 @@ export component PremiumButton inherits Rectangle {
             }
         }
     }
+    focus_scope := FocusScope {
+        key-pressed(e) => {
+            if (e.text == " " || e.text == "\n") {
+                if (root.enabled) { root.clicked(); }
+                return accept;
+            }
+            return reject;
+        }
+    }
 }
 
 export component PremiumSwitch inherits Rectangle {
@@ -68,8 +78,9 @@ export component PremiumSwitch inherits Rectangle {
     width: 44px;
     height: 24px;
     border-radius: 12px;
+    forward-focus: focus_scope;
     background: !root.enabled ? Theme.disabled : (root.checked ? Theme.secondary : Theme.surface-raised);
-    border-width: false ? Theme.focus-ring-width : 0px;
+    border-width: focus_scope.has-focus ? Theme.focus-ring-width : 0px;
     border-color: Theme.focus-ring;
     animate background, border-width { duration: 200ms; }
 
@@ -93,6 +104,19 @@ export component PremiumSwitch inherits Rectangle {
             }
         }
     }
+    
+    focus_scope := FocusScope {
+        key-pressed(e) => {
+            if (e.text == " " || e.text == "\n") {
+                if (root.enabled) { 
+                    root.checked = !root.checked;
+                    root.toggled(); 
+                }
+                return accept;
+            }
+            return reject;
+        }
+    }
 }
 
 export component IconButton inherits Rectangle {
@@ -106,6 +130,7 @@ export component IconButton inherits Rectangle {
     width: 32px;
     height: 32px;
     border-radius: Theme.radius-small;
+    forward-focus: focus_scope;
     
     background: !root.enabled ? transparent : (
         touch.pressed ? (is_danger ? Theme.danger-pressed : (is_primary ? Theme.primary-pressed : Theme.surface-pressed)) : (
@@ -113,8 +138,8 @@ export component IconButton inherits Rectangle {
         )
     );
     
-    border-width: false ? Theme.focus-ring-width : (touch.has-hover && root.enabled ? 1px : 0px);
-    border-color: false ? Theme.focus-ring : (is_danger ? Theme.danger : (is_primary ? Theme.primary : Theme.border));
+    border-width: focus_scope.has-focus ? Theme.focus-ring-width : (touch.has-hover && root.enabled ? 1px : 0px);
+    border-color: focus_scope.has-focus ? Theme.focus-ring : (is_danger ? Theme.danger : (is_primary ? Theme.primary : Theme.border));
     
     animate background, border-width { duration: 150ms; }
     
@@ -137,6 +162,16 @@ export component IconButton inherits Rectangle {
             if (root.enabled) {
                 root.clicked();
             }
+        }
+    }
+    
+    focus_scope := FocusScope {
+        key-pressed(e) => {
+            if (e.text == " " || e.text == "\n") {
+                if (root.enabled) { root.clicked(); }
+                return accept;
+            }
+            return reject;
         }
     }
     
@@ -172,22 +207,14 @@ export component SidebarItem inherits Rectangle {
 
     height: 36px;
     border-radius: Theme.radius-medium;
-    background: is_active ? #bf00ff33 : (touch.has-hover ? Theme.surface-hover : transparent);
+    forward-focus: focus_scope;
     
-    border-width: false ? Theme.focus-ring-width : 0px;
+    background: is_active ? Theme.surface-raised : (touch.has-hover ? Theme.surface-hover : transparent);
+    
+    border-width: focus_scope.has-focus ? Theme.focus-ring-width : 0px;
     border-color: Theme.focus-ring;
     
     animate background { duration: 150ms; }
-
-    Rectangle {
-        width: 3px;
-        height: 20px;
-        border-radius: 1.5px;
-        background: is_active ? Theme.secondary : transparent;
-        x: 0;
-        y: (parent.height - self.height) / 2;
-        animate background { duration: 150ms; }
-    }
 
     Text {
         text: root.text;
@@ -205,6 +232,16 @@ export component SidebarItem inherits Rectangle {
         height: 100%;
         clicked => { root.clicked() }
     }
+    
+    focus_scope := FocusScope {
+        key-pressed(e) => {
+            if (e.text == " " || e.text == "\n") {
+                root.clicked();
+                return accept;
+            }
+            return reject;
+        }
+    }
 }
 
 export component GlassActionCard inherits Rectangle {
@@ -216,10 +253,10 @@ export component GlassActionCard inherits Rectangle {
     height: 70px;
     border-radius: Theme.radius-large;
     background: touch.pressed ? Theme.surface-pressed : (touch.has-hover ? Theme.surface-hover : Theme.surface);
-    border-width: false ? Theme.focus-ring-width : 1px;
-    border-color: false ? Theme.focus-ring : (touch.has-hover ? Theme.border-hover : Theme.border);
-    drop-shadow-blur: touch.has-hover ? 10px : 5px;
-    drop-shadow-color: touch.has-hover ? #bf00ff22 : #00000055;
+    border-width: focus_scope.has-focus ? Theme.focus-ring-width : 1px;
+    border-color: focus_scope.has-focus ? Theme.focus-ring : (touch.has-hover ? Theme.border-hover : Theme.border);
+    drop-shadow-blur: touch.has-hover ? 4px : 2px;
+    drop-shadow-color: touch.has-hover ? #bf00ff11 : #00000033;
 
     animate background, border-color, drop-shadow-color { duration: 200ms; }
 
@@ -243,6 +280,17 @@ export component GlassActionCard inherits Rectangle {
     }
 
     touch := TouchArea { clicked => { root.clicked() } }
+    
+    forward-focus: focus_scope;
+    focus_scope := FocusScope {
+        key-pressed(e) => {
+            if (e.text == " " || e.text == "\n") {
+                root.clicked();
+                return accept;
+            }
+            return reject;
+        }
+    }
 }
 
 export component PremiumScrollView inherits Rectangle {
@@ -306,10 +354,33 @@ export component AppTextField inherits Rectangle {
         spacing: 6px;
         if label != "": Text { text: root.label; color: Theme.text-primary; font-size: Theme.font-body; }
         
-        LineEdit {
-            text <=> root.text;
-            placeholder-text: root.placeholder_text;
+        Rectangle {
             height: 36px;
+            border-radius: Theme.radius-medium;
+            background: Theme.surface-raised;
+            border-width: input.has-focus ? Theme.focus-ring-width : 1px;
+            border-color: input.has-focus ? Theme.focus-ring : (root.is_error ? Theme.danger : Theme.border);
+            animate border-width, border-color { duration: 150ms; }
+            
+            HorizontalLayout {
+                padding-left: 12px;
+                padding-right: 12px;
+                input := TextInput {
+                    text <=> root.text;
+                    color: Theme.text-primary;
+                    font-size: Theme.font-body;
+                    vertical-alignment: center;
+                    single-line: true;
+                }
+            }
+            if root.text == "" && root.placeholder_text != "": Text {
+                text: root.placeholder_text;
+                color: Theme.text-disabled;
+                font-size: Theme.font-body;
+                vertical-alignment: center;
+                x: 12px;
+                y: (parent.height - self.height) / 2;
+            }
         }
         
         if helper_text != "": Text { text: root.helper_text; color: is_error ? Theme.danger : Theme.text-muted; font-size: Theme.font-sub; }
@@ -320,20 +391,20 @@ export component StatusBadge inherits Rectangle {
     in property <string> text;
     in property <bool> is_active: false;
     
-    width: 60px;
-    height: 22px;
-    border-radius: Theme.radius-small;
-    background: is_active ? Theme.success-bg : Theme.surface-raised;
+    width: 50px;
+    height: 20px;
+    border-radius: 10px;
+    background: is_active ? Theme.success-bg : Theme.surface-hover;
     border-width: 1px;
     border-color: is_active ? Theme.success : Theme.border;
     
     Text { 
         text: root.text; 
-        color: is_active ? Theme.success : Theme.text-muted; 
-        font-size: Theme.font-caption; 
+        color: is_active ? Theme.success : Theme.text-secondary; 
+        font-size: Theme.font-sub; 
         horizontal-alignment: center; 
         vertical-alignment: center; 
-        font-weight: 600; 
+        font-weight: 500; 
     }
 }
 
@@ -366,15 +437,13 @@ export component LoadingIndicator inherits Rectangle {
     width: 24px;
     height: 24px;
     
-    Rectangle {
+    Path {
         width: 100%; height: 100%;
-        border-radius: self.width / 2;
-        border-width: 2px;
-        border-color: transparent;
-        // Slint doesn't have partial border natively easily, so we use a rotating icon or just text if icon is not available
-        // For simplicity, we just use a small rotating block or standard Slint trick.
-        Text { text: "↻"; color: Theme.secondary; font-size: 20px; horizontal-alignment: center; vertical-alignment: center; 
-               transform-rotation: animation-tick() / 1s * 360deg; }
+        stroke: Theme.secondary;
+        stroke-width: 2px;
+        commands: "M 12 2 A 10 10 0 0 1 22 12";
+        // To make it spin around center 12, 12
+        transform-rotation: animation-tick() / 1s * 360deg;
     }
 }
 
@@ -415,7 +484,13 @@ export component ModalShell inherits Rectangle {
             HorizontalLayout {
                 alignment: space-between;
                 Text { text: root.title; color: Theme.text-primary; font-size: Theme.font-header; font-weight: 700; vertical-alignment: center; }
-                IconButton { icon: @image-url("back.svg"); tooltip_text: "Close"; clicked => { root.close_clicked() } } // Use back.svg or an X icon. Since X is not an svg we have, we'll use a small button with text 'x' later if needed, but let's just use text for close.
+                Rectangle {
+                    width: 24px; height: 24px; border-radius: 12px;
+                    background: close_touch.has-hover ? Theme.surface-hover : transparent;
+                    animate background { duration: 150ms; }
+                    Text { text: "×"; color: Theme.text-secondary; font-size: 20px; font-weight: 300; horizontal-alignment: center; vertical-alignment: center; y: -2px; }
+                    close_touch := TouchArea { clicked => { root.close_clicked() } }
+                }
             }
             
             @children

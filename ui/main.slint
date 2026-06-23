@@ -23,6 +23,7 @@ export struct SubItem {
 }
 
 export component MainWindow inherits Window {
+    default-font-family: Theme.font-primary;
     title: "2con Client";
     no-frame: true;
     background: transparent;
@@ -247,9 +248,7 @@ export component MainWindow inherits Window {
                                 height: 120px;
                                 border-radius: 60px;
                                 background: root.connected ? Theme.secondary : Theme.surface-raised;
-                                
-                                drop-shadow-color: root.connected ? #00e5ff44 : transparent;
-                                drop-shadow-blur: 20px;
+                                drop-shadow-blur: 0px;
                                 animate background, drop-shadow-color { duration: 300ms; }
                                 
                                 Image {
@@ -597,7 +596,10 @@ export component MainWindow inherits Window {
                                 AppSectionCard {
                                     title: "System Proxy Exclusions (Bypass List)";
                                     description: "Do not use proxy server for addresses beginning with the following. Use semicolon (;) to separate entries.";
-                                    TextEdit { text <=> root.bypass_list; height: 120px; edited => { root.settings_changed(); } }
+                                    Rectangle {
+                                        height: 120px; border-radius: Theme.radius-medium; background: Theme.surface-raised; border-width: 1px; border-color: Theme.border;
+                                        TextEdit { text <=> root.bypass_list; edited => { root.settings_changed(); } }
+                                    }
                                 }
                                 
                                 AppSectionCard {
@@ -634,8 +636,8 @@ export component MainWindow inherits Window {
                                 AppSectionCard {
                                     title: "DNS Overrides";
                                     description: "Define static domain-to-IP mappings, or use a complete JSON string to override all DNS behaviors.";
-                                    VerticalBox { spacing: 8px; Text { text: "DNS Hosts (domain IP per line)"; color: Theme.text-primary; font-size: Theme.font-body-large; } TextEdit { text <=> root.dns_hosts; height: 100px; edited => { root.settings_changed(); } } }
-                                    VerticalBox { spacing: 8px; Text { text: "Custom DNS Object (JSON)"; color: Theme.text-primary; font-size: Theme.font-body-large; } TextEdit { text <=> root.custom_dns_json; height: 120px; edited => { root.settings_changed(); } } }
+                                    VerticalBox { spacing: 8px; Text { text: "DNS Hosts (domain IP per line)"; color: Theme.text-primary; font-size: Theme.font-body-large; } Rectangle { height: 100px; border-radius: Theme.radius-medium; background: Theme.surface-raised; border-width: 1px; border-color: Theme.border; TextEdit { text <=> root.dns_hosts; edited => { root.settings_changed(); } } } }
+                                    VerticalBox { spacing: 8px; Text { text: "Custom DNS Object (JSON)"; color: Theme.text-primary; font-size: Theme.font-body-large; } Rectangle { height: 120px; border-radius: Theme.radius-medium; background: Theme.surface-raised; border-width: 1px; border-color: Theme.border; TextEdit { text <=> root.custom_dns_json; edited => { root.settings_changed(); } } } }
                                 }
                             }
                         }
@@ -673,7 +675,7 @@ export component MainWindow inherits Window {
                                     log_text := Text {
                                         text: root.app_logs;
                                         color: Theme.text-accent;
-                                        font-family: "Courier New"; // monospace
+                                        font-family: Theme.font-mono;
                                         font-size: Theme.font-sub;
                                         wrap: word-wrap;
                                         x: 12px; y: 12px; width: parent.width - 24px;
