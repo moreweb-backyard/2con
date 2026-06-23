@@ -31,6 +31,25 @@ async fn main() -> Result<(), slint::PlatformError> {
         ui.set_mux_enabled(s_guard.mux_enabled);
         ui.set_log_level(s_guard.log_level.clone().into());
         ui.set_docking_position(s_guard.docking.clone().into());
+        
+        ui.set_enable_udp(s_guard.enable_udp);
+        ui.set_enable_sniffing(s_guard.enable_sniffing);
+        ui.set_allow_lan(s_guard.allow_lan);
+        ui.set_enable_fragment(s_guard.enable_fragment);
+        
+        ui.set_bypass_list(s_guard.bypass_list.clone().into());
+        
+        ui.set_domestic_dns(s_guard.domestic_dns.clone().into());
+        ui.set_remote_dns(s_guard.remote_dns.clone().into());
+        ui.set_bootstrap_dns(s_guard.bootstrap_dns.clone().into());
+        ui.set_enable_fakeip(s_guard.enable_fakeip);
+        ui.set_block_svcb(s_guard.block_svcb);
+        ui.set_add_common_dns(s_guard.add_common_dns);
+        ui.set_dns_hosts(s_guard.dns_hosts.clone().into());
+        ui.set_custom_dns_json(s_guard.custom_dns_json.clone().into());
+        
+        ui.set_start_on_boot(s_guard.start_on_boot);
+        ui.set_auto_update_geo(s_guard.auto_update_geo.to_string().into());
     }
 
     // 1. Config List Model
@@ -246,6 +265,25 @@ async fn main() -> Result<(), slint::PlatformError> {
             s_guard.mux_enabled = u.get_mux_enabled();
             s_guard.log_level = u.get_log_level().to_string();
             
+            s_guard.enable_udp = u.get_enable_udp();
+            s_guard.enable_sniffing = u.get_enable_sniffing();
+            s_guard.allow_lan = u.get_allow_lan();
+            s_guard.enable_fragment = u.get_enable_fragment();
+            
+            s_guard.bypass_list = u.get_bypass_list().to_string();
+            
+            s_guard.domestic_dns = u.get_domestic_dns().to_string();
+            s_guard.remote_dns = u.get_remote_dns().to_string();
+            s_guard.bootstrap_dns = u.get_bootstrap_dns().to_string();
+            s_guard.enable_fakeip = u.get_enable_fakeip();
+            s_guard.block_svcb = u.get_block_svcb();
+            s_guard.add_common_dns = u.get_add_common_dns();
+            s_guard.dns_hosts = u.get_dns_hosts().to_string();
+            s_guard.custom_dns_json = u.get_custom_dns_json().to_string();
+            
+            s_guard.start_on_boot = u.get_start_on_boot();
+            s_guard.auto_update_geo = u.get_auto_update_geo().to_string().parse().unwrap_or(0);
+            
             let docking = u.get_docking_position().to_string();
             let docking_changed = s_guard.docking != docking;
             s_guard.docking = docking.clone();
@@ -417,6 +455,12 @@ async fn main() -> Result<(), slint::PlatformError> {
     let _sub_model_update = sub_model.clone();
     let ui_update = ui.as_weak();
     
+    ui.on_download_routing_rules(move || {
+        tokio::spawn(async move {
+            let _ = proxy::download_routing_rules().await;
+        });
+    });
+
     ui.on_update_subscriptions(move |use_proxy| {
         let ui_weak = ui_update.clone();
         if let Some(u) = ui_weak.upgrade() {
@@ -606,6 +650,13 @@ async fn main() -> Result<(), slint::PlatformError> {
     let active_id_connect = active_config_id.clone();
     let app_settings_connect = app_settings.clone();
     
+    let ui_clear_logs = ui.as_weak();
+    ui.on_clear_logs(move || {
+        if let Some(u) = ui_clear_logs.upgrade() {
+            u.set_app_logs("".into());
+        }
+    });
+
     ui.on_toggle_connect(move || {
         let ui = ui_handle.unwrap();
         let currently_connected = ui.get_connected();
@@ -694,7 +745,32 @@ async fn main() -> Result<(), slint::PlatformError> {
                         );
                         
                         let mut runner = runner_clone.lock().await;
-                        if let Err(e) = runner.start(xray_cfg).await {
+                        
+                        let (log_tx, mut log_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+                        let ui_logs = ui_clone.clone();
+                        tokio::spawn(async move {
+                            while let Some(log_msg) = log_rx.recv().await {
+                                let ui_weak = ui_logs.clone();
+                                let _ = slint::invoke_from_event_loop(move || {
+                                    if let Some(u) = ui_weak.upgrade() {
+                                        let current = u.get_app_logs();
+                                        // simple truncation to prevent endless memory usage
+                                        let mut new_logs = format!("{}{}", current, log_msg);
+                                        if new_logs.len() > 10000 {
+                                            let split_point = new_logs.len() - 5000;
+                                            if let Some(idx) = new_logs[split_point..].find('\n') {
+                                                new_logs = new_logs[split_point + idx + 1..].to_string();
+                                            } else {
+                                                new_logs = new_logs[split_point..].to_string();
+                                            }
+                                        }
+                                        u.set_app_logs(new_logs.into());
+                                    }
+                                });
+                            }
+                        });
+                        
+                        if let Err(e) = runner.start(xray_cfg, log_tx).await {
                             eprintln!("Error starting proxy: {}", e);
                             slint::invoke_from_event_loop(move || {
                                 if let Some(u) = ui_clone.upgrade() {
@@ -1131,13 +1207,22 @@ async fn main() -> Result<(), slint::PlatformError> {
     let ui_edit = ui.as_weak();
     ui.on_open_edit_proxy(move |id| {
         let id_str = id.to_string();
-        let p_guard = profiles_edit.lock().unwrap();
-        if let Some(p) = p_guard.iter().find(|x| x.id == id_str) {
+        if id_str.is_empty() {
             if let Some(u) = ui_edit.upgrade() {
-                u.set_edit_proxy_id(p.id.clone().into());
-                u.set_edit_proxy_name(p.name.clone().into());
-                u.set_edit_proxy_link(p.raw_link.clone().into());
+                u.set_edit_proxy_id("".into());
+                u.set_edit_proxy_name("New Custom Proxy".into());
+                u.set_edit_proxy_link("vless://...".into());
                 u.set_show_edit_modal(true);
+            }
+        } else {
+            let p_guard = profiles_edit.lock().unwrap();
+            if let Some(p) = p_guard.iter().find(|x| x.id == id_str) {
+                if let Some(u) = ui_edit.upgrade() {
+                    u.set_edit_proxy_id(p.id.clone().into());
+                    u.set_edit_proxy_name(p.name.clone().into());
+                    u.set_edit_proxy_link(p.raw_link.clone().into());
+                    u.set_show_edit_modal(true);
+                }
             }
         }
     });
@@ -1158,29 +1243,70 @@ async fn main() -> Result<(), slint::PlatformError> {
             let new_name = u.get_edit_proxy_name().to_string();
             let new_link = u.get_edit_proxy_link().to_string();
             
-            let mut p_guard = profiles_save.lock().unwrap();
-            if let Some(p) = p_guard.iter_mut().find(|x| x.id == id) {
-                p.name = new_name.clone();
-                p.raw_link = new_link.clone();
-                if let Some(parsed) = config::ProxyConfig::parse(&new_link) {
-                    p.protocol = parsed.protocol.clone();
-                }
+            let mut protocol = "unknown".to_string();
+            if let Some(parsed) = config::ProxyConfig::parse(&new_link) {
+                protocol = parsed.protocol;
             }
-            config::save_profiles(&p_guard);
             
-            for i in 0..proxy_model_save.row_count() {
-                if let Some(mut item) = proxy_model_save.row_data(i) {
-                    if item.id == id {
-                        item.name = new_name.clone().into();
-                        if let Some(parsed) = config::ProxyConfig::parse(&new_link) {
-                            item.protocol = parsed.protocol.into();
+            let mut p_guard = profiles_save.lock().unwrap();
+            
+            if id.is_empty() {
+                // New profile
+                let new_id = uuid::Uuid::new_v4().to_string();
+                let new_profile = config::Profile {
+                    id: new_id.clone(),
+                    name: new_name.clone(),
+                    protocol: protocol.clone(),
+                    raw_link: new_link.clone(),
+                    sub_group: "Custom".to_string(),
+                };
+                p_guard.push(new_profile);
+                let mut address = String::new();
+                let mut port = String::new();
+                let mut transport = String::new();
+                let mut tls = String::new();
+                
+                if let Some(parsed) = config::ProxyConfig::parse(&new_link) {
+                    address = parsed.addresses.first().unwrap_or(&"".to_string()).clone();
+                    port = parsed.port.to_string();
+                    transport = parsed.transport.clone();
+                    tls = parsed.tls.clone();
+                }
+
+                let proxy_item = ProxyItem {
+                    id: new_id.into(),
+                    name: new_name.into(),
+                    protocol: protocol.into(),
+                    address: address.into(),
+                    port: port.into(),
+                    transport: transport.into(),
+                    tls: tls.into(),
+                    sub_group: "Custom".into(),
+                    is_active: false,
+                    latency: "-".into(),
+                    latency_color: slint::Color::from_rgb_u8(120, 120, 120),
+                };
+                proxy_model_save.push(proxy_item);
+            } else {
+                if let Some(p) = p_guard.iter_mut().find(|x| x.id == id) {
+                    p.name = new_name.clone();
+                    p.raw_link = new_link.clone();
+                    p.protocol = protocol.clone();
+                }
+                
+                for i in 0..proxy_model_save.row_count() {
+                    if let Some(mut item) = proxy_model_save.row_data(i) {
+                        if item.id == id {
+                            item.name = new_name.clone().into();
+                            item.protocol = protocol.clone().into();
+                            proxy_model_save.set_row_data(i, item);
+                            break;
                         }
-                        proxy_model_save.set_row_data(i, item);
-                        break;
                     }
                 }
             }
             
+            config::save_profiles(&p_guard);
             u.set_show_edit_modal(false);
         }
     });

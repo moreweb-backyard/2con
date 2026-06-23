@@ -1,4 +1,4 @@
-import { Button, CheckBox, ComboBox, GroupBox, LineEdit, Switch, VerticalBox, HorizontalBox, ListView } from "std-widgets.slint";
+import { Button, CheckBox, ComboBox, GroupBox, LineEdit, TextEdit, Switch, VerticalBox, HorizontalBox, ListView, ScrollView } from "std-widgets.slint";
 
 export struct ProxyItem {
     id: string,
@@ -226,6 +226,32 @@ component GlassActionCard inherits Rectangle {
     touch := TouchArea { clicked => { root.clicked() } }
 }
 
+export component PremiumScrollView inherits Rectangle {
+    in property <length> viewport_height;
+    out property <length> viewport_y: flick.viewport-y;
+    
+    clip: true;
+    
+    flick := Flickable {
+        width: parent.width;
+        height: parent.height;
+        viewport-height: root.viewport_height;
+        @children
+    }
+    
+    // Custom Purple Scrollbar
+    if (flick.viewport-height > flick.height): Rectangle {
+        width: 6px;
+        height: max(20px, flick.height * (flick.height / flick.viewport-height));
+        x: parent.width - 8px;
+        y: -flick.viewport-y * (flick.height / flick.viewport-height);
+        background: #bb86fc88;
+        border-radius: 3px;
+        
+        // Hover and interaction could be added here, but mouse wheel works natively via Flickable
+    }
+}
+
 export component MainWindow inherits Window {
     title: "2con Client";
     no-frame: true;
@@ -248,6 +274,7 @@ export component MainWindow inherits Window {
     callback import_proxy(string);
     callback delete_proxy(string);
     callback settings_changed();
+    callback download_routing_rules();
     callback add_subscription(string);
     callback delete_subscription(string);
     callback update_subscriptions(bool);
@@ -283,6 +310,10 @@ export component MainWindow inherits Window {
     in-out property <string> active_config_name: "Select Configuration";
     in-out property <bool> is_scanning: false;
     
+    in-out property <string> app_logs: "2con Client Initialized...\n";
+    callback clear_logs();
+    
+    
     in-out property <string> upload_speed: "0 B/s";
     in-out property <string> download_speed: "0 B/s";
     in-out property <string> total_data: "0 B";
@@ -296,6 +327,29 @@ export component MainWindow inherits Window {
     in-out property <string> socks_port: "10808";
     in-out property <bool> mux_enabled: false;
     in-out property <string> log_level: "warning";
+    
+    // Advanced Core
+    in-out property <bool> enable_udp: true;
+    in-out property <bool> enable_sniffing: false;
+    in-out property <bool> allow_lan: false;
+    in-out property <bool> enable_fragment: false;
+    
+    // Routing
+    in-out property <string> bypass_list: "localhost;127.*";
+    
+    // DNS
+    in-out property <string> domestic_dns: "8.8.8.8";
+    in-out property <string> remote_dns: "tcp://8.8.8.8";
+    in-out property <string> bootstrap_dns: "8.8.8.8";
+    in-out property <bool> enable_fakeip: false;
+    in-out property <bool> block_svcb: true;
+    in-out property <bool> add_common_dns: true;
+    in-out property <string> dns_hosts: "";
+    in-out property <string> custom_dns_json: "";
+    
+    // General
+    in-out property <bool> start_on_boot: false;
+    in-out property <string> auto_update_geo: "0";
     in-out property <string> docking_position: "None"; // "None", "Top Left", "Top Right", "Bottom Left", "Bottom Right"
     
     // UI State
@@ -582,6 +636,8 @@ export component MainWindow inherits Window {
                         Text { text: "MANAGEMENT"; color: #888; font-size: 11px; font-weight: 700; }
                         SidebarItem { text: "Configs"; is_active: root.active_settings_tab == 2; clicked => { root.active_settings_tab = 2; } }
                         SidebarItem { text: "Subscriptions"; is_active: root.active_settings_tab == 3; clicked => { root.active_settings_tab = 3; } }
+                        SidebarItem { text: "Logs"; is_active: root.active_settings_tab == 6; clicked => { root.active_settings_tab = 6; } }
+                        
                         
                         Rectangle { horizontal-stretch: 1; vertical-stretch: 1; }
                         
@@ -595,71 +651,130 @@ export component MainWindow inherits Window {
                     horizontal-stretch: 1;
                     clip: true;
                     
-                    // GENERAL SETTINGS
-                    if root.active_settings_tab == 0: VerticalBox {
-                        padding: 30px;
-                        spacing: 24px;
-                        alignment: start;
-                        
-                        Text { text: "General Settings"; color: white; font-size: 24px; font-weight: 700; }
-                        
-                        HorizontalBox {
-                            Text { text: "Autopilot Mode"; color: white; vertical-alignment: center; font-size: 16px; }
-                            Rectangle { horizontal-stretch: 1; }
-                            PremiumSwitch {
-                                checked: root.autopilot_enabled;
-                                toggled => {
-                                    root.set_autopilot(self.checked);
+                    if root.active_settings_tab == 0: PremiumScrollView {
+                        viewport_height: gen_content.preferred-height;
+                        gen_content := VerticalBox {
+                            padding: 30px;
+                            spacing: 24px;
+                            alignment: start;
+                            
+                            Text { text: "General Settings"; color: white; font-size: 24px; font-weight: 700; }
+                            
+                            HorizontalBox {
+                                Text { text: "Autopilot Mode"; color: white; vertical-alignment: center; font-size: 16px; }
+                                Rectangle { horizontal-stretch: 1; }
+                                PremiumSwitch {
+                                    checked: root.autopilot_enabled;
+                                    toggled => {
+                                        root.set_autopilot(self.checked);
+                                    }
                                 }
                             }
-                        }
-                        
-                        VerticalBox {
-                            spacing: 8px;
-                            Text { text: "Docking Position"; color: white; font-size: 16px; }
-                            Text { text: "Snap the client to a specific screen corner."; color: #888; font-size: 12px; }
-                            ComboBox {
-                                model: ["None", "Top Left", "Top Right", "Bottom Left", "Bottom Right"];
-                                current-value <=> root.docking_position;
-                                selected => { root.settings_changed(); }
+                            
+                            VerticalBox {
+                                spacing: 8px;
+                                Text { text: "Docking Position"; color: white; font-size: 16px; }
+                                Text { text: "Snap the client to a specific screen corner."; color: #888; font-size: 12px; }
+                                ComboBox {
+                                    model: ["None", "Top Left", "Top Right", "Bottom Left", "Bottom Right"];
+                                    current-value <=> root.docking_position;
+                                    selected => { root.settings_changed(); }
+                                }
+                            }
+                            
+                            HorizontalBox {
+                                Text { text: "Start on Boot"; color: white; vertical-alignment: center; font-size: 16px; }
+                                Rectangle { horizontal-stretch: 1; }
+                                PremiumSwitch {
+                                    checked <=> root.start_on_boot;
+                                    toggled => { root.settings_changed(); }
+                                }
+                            }
+                            
+                            VerticalBox {
+                                spacing: 8px;
+                                Text { text: "Auto-Update Geo Interval (Hours)"; color: white; font-size: 16px; }
+                                Text { text: "0 to disable automatic updates."; color: #888; font-size: 12px; }
+                                LineEdit {
+                                    text <=> root.auto_update_geo;
+                                    input-type: number;
+                                    edited => { root.settings_changed(); }
+                                }
                             }
                         }
                     }
                     
                     // V2RAY CORE SETTINGS
-                    if root.active_settings_tab == 1: VerticalBox {
-                        padding: 30px;
-                        spacing: 24px;
-                        alignment: start;
-                        
-                        Text { text: "V2Ray Core Settings"; color: white; font-size: 24px; font-weight: 700; }
-                        
-                        VerticalBox {
-                            spacing: 8px;
-                            Text { text: "SOCKS Inbound Port"; color: white; font-size: 16px; }
-                            LineEdit {
-                                text <=> root.socks_port;
-                                edited => { root.settings_changed(); }
+                    if root.active_settings_tab == 1: PremiumScrollView {
+                        viewport_height: v2ray_content.preferred-height;
+                        v2ray_content := VerticalBox {
+                            padding: 30px;
+                            spacing: 24px;
+                            alignment: start;
+                            
+                            Text { text: "V2Ray Core Settings"; color: white; font-size: 24px; font-weight: 700; }
+                            
+                            VerticalBox {
+                                spacing: 8px;
+                                Text { text: "SOCKS Inbound Port"; color: white; font-size: 16px; }
+                                LineEdit {
+                                    text <=> root.socks_port;
+                                    edited => { root.settings_changed(); }
+                                }
                             }
-                        }
-                        
-                        VerticalBox {
-                            spacing: 8px;
-                            Text { text: "Log Level"; color: white; font-size: 16px; }
-                            ComboBox {
-                                model: ["debug", "info", "warning", "error", "none"];
-                                current-value <=> root.log_level;
-                                selected => { root.settings_changed(); }
+                            
+                            VerticalBox {
+                                spacing: 8px;
+                                Text { text: "Log Level"; color: white; font-size: 16px; }
+                                ComboBox {
+                                    model: ["debug", "info", "warning", "error", "none"];
+                                    current-value <=> root.log_level;
+                                    selected => { root.settings_changed(); }
+                                }
                             }
-                        }
-                        
-                        HorizontalBox {
-                            Text { text: "Mux (Multiplexing)"; color: white; vertical-alignment: center; font-size: 16px; }
-                            Rectangle { horizontal-stretch: 1; }
-                            PremiumSwitch {
-                                checked: root.mux_enabled;
-                                toggled => {
-                                    root.settings_changed();
+                            
+                            HorizontalBox {
+                                Text { text: "Mux (Multiplexing)"; color: white; vertical-alignment: center; font-size: 16px; }
+                                Rectangle { horizontal-stretch: 1; }
+                                PremiumSwitch {
+                                    checked <=> root.mux_enabled;
+                                    toggled => { root.settings_changed(); }
+                                }
+                            }
+                            
+                            HorizontalBox {
+                                Text { text: "Enable UDP"; color: white; vertical-alignment: center; font-size: 16px; }
+                                Rectangle { horizontal-stretch: 1; }
+                                PremiumSwitch {
+                                    checked <=> root.enable_udp;
+                                    toggled => { root.settings_changed(); }
+                                }
+                            }
+                            
+                            HorizontalBox {
+                                Text { text: "Allow LAN Connections"; color: white; vertical-alignment: center; font-size: 16px; }
+                                Rectangle { horizontal-stretch: 1; }
+                                PremiumSwitch {
+                                    checked <=> root.allow_lan;
+                                    toggled => { root.settings_changed(); }
+                                }
+                            }
+                            
+                            HorizontalBox {
+                                Text { text: "Enable Sniffing"; color: white; vertical-alignment: center; font-size: 16px; }
+                                Rectangle { horizontal-stretch: 1; }
+                                PremiumSwitch {
+                                    checked <=> root.enable_sniffing;
+                                    toggled => { root.settings_changed(); }
+                                }
+                            }
+                            
+                            HorizontalBox {
+                                Text { text: "Enable Fragment"; color: white; vertical-alignment: center; font-size: 16px; }
+                                Rectangle { horizontal-stretch: 1; }
+                                PremiumSwitch {
+                                    checked <=> root.enable_fragment;
+                                    toggled => { root.settings_changed(); }
                                 }
                             }
                         }
@@ -894,24 +1009,128 @@ export component MainWindow inherits Window {
                     }
                     
                     // ROUTING SETTINGS
-                    if root.active_settings_tab == 4: VerticalBox {
-                        padding: 30px;
-                        spacing: 24px;
-                        alignment: start;
-                        Text { text: "Routing Setting"; color: white; font-size: 20px; font-weight: 700; }
-                        Text { text: "Configure global routing rules and domains. (Coming soon...)"; color: #888; font-size: 14px; }
-                        PremiumButton { text: "Import Chocolate4U Routing rules"; has_icon: true; icon: @image-url("download.svg"); width: 280px; clicked => {} }
+                    if root.active_settings_tab == 4: PremiumScrollView {
+                        viewport_height: route_content.preferred-height;
+                        route_content := VerticalBox {
+                            padding: 30px;
+                            spacing: 24px;
+                            alignment: start;
+                            Text { text: "Routing Setting"; color: white; font-size: 20px; font-weight: 700; }
+                            
+                            VerticalBox {
+                                spacing: 8px;
+                                Text { text: "System Proxy Exclusions (Bypass List)"; color: white; font-size: 16px; }
+                                Text { text: "Do not use proxy server for addresses beginning with the following. Use semicolon (;) to separate entries."; color: #888; font-size: 12px; }
+                                TextEdit {
+                                    text <=> root.bypass_list;
+                                    height: 120px;
+                                    edited => { root.settings_changed(); }
+                                }
+                            }
+                            
+                            PremiumButton { text: "Import Chocolate4U Routing rules"; has_icon: true; icon: @image-url("download.svg"); width: 280px; clicked => { root.download_routing_rules(); } }
+                        }
                     }
                     
                     // DNS SETTINGS
-                    if root.active_settings_tab == 5: VerticalBox {
-                        padding: 30px;
-                        spacing: 24px;
-                        alignment: start;
-                        Text { text: "DNS Settings"; color: white; font-size: 20px; font-weight: 700; }
-                        Text { text: "Configure custom nameservers. (Coming soon...)"; color: #888; font-size: 14px; }
+                    if root.active_settings_tab == 5: PremiumScrollView {
+                        viewport_height: dns_content.preferred-height;
+                        dns_content := VerticalBox {
+                            padding: 30px;
+                            spacing: 24px;
+                            alignment: start;
+                            Text { text: "DNS Settings"; color: white; font-size: 20px; font-weight: 700; }
+                            
+                            // Basic DNS
+                            VerticalBox {
+                                spacing: 8px;
+                                Text { text: "Domestic DNS"; color: white; font-size: 16px; }
+                                LineEdit { text <=> root.domestic_dns; edited => { root.settings_changed(); } }
+                            }
+                            VerticalBox {
+                                spacing: 8px;
+                                Text { text: "Remote DNS"; color: white; font-size: 16px; }
+                                LineEdit { text <=> root.remote_dns; edited => { root.settings_changed(); } }
+                            }
+                            VerticalBox {
+                                spacing: 8px;
+                                Text { text: "Bootstrap DNS"; color: white; font-size: 16px; }
+                                LineEdit { text <=> root.bootstrap_dns; edited => { root.settings_changed(); } }
+                            }
+                            
+                            // Advanced DNS
+                            HorizontalBox {
+                                Text { text: "Add Common DNS Hosts"; color: white; vertical-alignment: center; font-size: 16px; }
+                                Rectangle { horizontal-stretch: 1; }
+                                PremiumSwitch { checked <=> root.add_common_dns; toggled => { root.settings_changed(); } }
+                            }
+                            HorizontalBox {
+                                Text { text: "FakeIP"; color: white; vertical-alignment: center; font-size: 16px; }
+                                Rectangle { horizontal-stretch: 1; }
+                                PremiumSwitch { checked <=> root.enable_fakeip; toggled => { root.settings_changed(); } }
+                            }
+                            HorizontalBox {
+                                Text { text: "Block SVCB and HTTPS Queries"; color: white; vertical-alignment: center; font-size: 16px; }
+                                Rectangle { horizontal-stretch: 1; }
+                                PremiumSwitch { checked <=> root.block_svcb; toggled => { root.settings_changed(); } }
+                            }
+                            
+                            // Hosts
+                            VerticalBox {
+                                spacing: 8px;
+                                Text { text: "DNS Hosts (domain IP per line)"; color: white; font-size: 16px; }
+                                TextEdit { text <=> root.dns_hosts; height: 100px; edited => { root.settings_changed(); } }
+                            }
+                            
+                            // Custom JSON
+                            VerticalBox {
+                                spacing: 8px;
+                                Text { text: "Custom DNS Object (JSON)"; color: white; font-size: 16px; }
+                                Text { text: "If specified, overrides all other DNS settings."; color: #888; font-size: 12px; }
+                                TextEdit { text <=> root.custom_dns_json; height: 120px; edited => { root.settings_changed(); } }
+                            }
+                        }
                     }
                 }
+                    // LOGS SETTINGS
+                    if root.active_settings_tab == 6: VerticalBox {
+                        padding: 20px;
+                        spacing: 12px;
+                        
+                        HorizontalBox {
+                            alignment: start;
+                            VerticalBox {
+                                Text { text: "System Logs"; color: white; font-size: 20px; font-weight: 700; }
+                                Text { text: "Real-time output from the Xray core and app backend."; color: #888; font-size: 14px; }
+                            }
+                            Rectangle { horizontal-stretch: 1; }
+                            PremiumButton { text: "Clear Logs"; has_icon: true; icon: @image-url("trash.svg"); width: 130px; is_danger: true; clicked => { root.clear_logs(); } }
+                        }
+                        
+                        Rectangle {
+                            vertical-stretch: 1;
+                            background: #0A0010;
+                            border-radius: 8px;
+                            border-width: 1px;
+                            border-color: #ffffff11;
+                            
+                            Flickable {
+                                viewport-height: log_text.preferred-height;
+                                width: 100%;
+                                height: 100%;
+                                
+                                log_text := Text {
+                                    text: root.app_logs;
+                                    color: #00e5ff;
+                                    font-size: 12px;
+                                    wrap: word-wrap;
+                                    x: 8px;
+                                    y: 8px;
+                                    width: parent.width - 16px;
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

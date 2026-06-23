@@ -30,7 +30,87 @@ pub struct ProxyConfig {
 
 impl ProxyConfig {
     pub fn parse(link: &str) -> Option<Self> {
-        if link.starts_with("vless://") || link.starts_with("trojan://") {
+        if link.starts_with("vmess://") {
+            use base64::Engine;
+            let b64 = &link[8..];
+            if let Ok(decoded) = base64::engine::general_purpose::STANDARD.decode(b64) {
+                if let Ok(json_str) = String::from_utf8(decoded) {
+                    if let Ok(val) = serde_json::from_str::<serde_json::Value>(&json_str) {
+                        return Some(ProxyConfig {
+                            protocol: "vmess".to_string(),
+                            addresses: vec![val["add"].as_str().unwrap_or("").to_string()],
+                            port: val["port"].as_u64().or_else(|| val["port"].as_str().and_then(|s| s.parse().ok())).unwrap_or(443) as u16,
+                            uuid: val["id"].as_str().unwrap_or("").to_string(),
+                            hostname: val["host"].as_str().unwrap_or("").to_string(),
+                            path: val["path"].as_str().unwrap_or("").to_string(),
+                            tls: val["tls"].as_str().unwrap_or("").to_string(),
+                            sni: val["sni"].as_str().or(val["host"].as_str()).unwrap_or("").to_string(),
+                            transport: val["net"].as_str().unwrap_or("tcp").to_string(),
+                        });
+                    }
+                }
+            }
+            return None;
+        } else if link.starts_with("ss://") {
+            use base64::Engine;
+            
+            // ss:// links often look like ss://BASE64@host:port#name
+            // or ss://BASE64#name where BASE64 = method:password@host:port
+            
+            let mut host_part = "";
+            let mut port_part = "";
+            let mut method_pass = "";
+            
+            if let Some(at_idx) = link.find('@') {
+                // ss://BASE64@host:port#name
+                let b64 = &link[5..at_idx];
+                if let Ok(decoded) = base64::engine::general_purpose::STANDARD.decode(b64) {
+                    if let Ok(decoded_str) = String::from_utf8(decoded) {
+                        method_pass = Box::leak(decoded_str.into_boxed_str());
+                    }
+                }
+                
+                let remainder = &link[at_idx+1..];
+                let end_idx = remainder.find('#').unwrap_or(remainder.len());
+                let host_port = &remainder[..end_idx];
+                
+                if let Some(colon) = host_port.rfind(':') {
+                    host_part = &host_port[..colon];
+                    port_part = &host_port[colon+1..];
+                }
+            } else {
+                // ss://BASE64#name
+                let end_idx = link.find('#').unwrap_or(link.len());
+                let b64 = &link[5..end_idx];
+                if let Ok(decoded) = base64::engine::general_purpose::STANDARD.decode(b64) {
+                    if let Ok(decoded_str) = String::from_utf8(decoded) {
+                        if let Some(at_idx) = decoded_str.rfind('@') {
+                            method_pass = Box::leak(decoded_str[..at_idx].to_string().into_boxed_str());
+                            let host_port = &decoded_str[at_idx+1..];
+                            if let Some(colon) = host_port.rfind(':') {
+                                host_part = Box::leak(host_port[..colon].to_string().into_boxed_str());
+                                port_part = Box::leak(host_port[colon+1..].to_string().into_boxed_str());
+                            }
+                        }
+                    }
+                }
+            }
+            
+            if !host_part.is_empty() && !port_part.is_empty() {
+                return Some(ProxyConfig {
+                    protocol: "shadowsocks".to_string(),
+                    addresses: vec![host_part.to_string()],
+                    port: port_part.parse().unwrap_or(443),
+                    uuid: method_pass.to_string(), // we use uuid to store method:password for simplicity
+                    hostname: "".to_string(),
+                    path: "".to_string(),
+                    tls: "".to_string(),
+                    sni: "".to_string(),
+                    transport: "tcp".to_string(),
+                });
+            }
+            return None;
+        } else if link.starts_with("vless://") || link.starts_with("trojan://") {
             let protocol = if link.starts_with("vless://") { "vless" } else { "trojan" };
             let url = Url::parse(link).ok()?;
             let uuid = url.username().to_string();
@@ -102,7 +182,55 @@ pub struct AppSettings {
     pub mux_enabled: bool,
     pub log_level: String,
     pub docking: String, // "None", "Top Left", "Top Right", "Bottom Left", "Bottom Right"
+    
+    // Advanced Core
+    #[serde(default = "default_true")]
+    pub enable_udp: bool,
+    #[serde(default = "default_false")]
+    pub enable_sniffing: bool,
+    #[serde(default = "default_sniffing_types")]
+    pub sniffing_types: Vec<String>,
+    #[serde(default = "default_false")]
+    pub allow_lan: bool,
+    #[serde(default = "default_false")]
+    pub enable_fragment: bool,
+    
+    // Routing
+    #[serde(default = "default_bypass_list")]
+    pub bypass_list: String,
+    
+    // General
+    #[serde(default = "default_false")]
+    pub start_on_boot: bool,
+    #[serde(default)]
+    pub auto_update_geo: u32,
+    
+    // DNS
+    #[serde(default = "default_domestic_dns")]
+    pub domestic_dns: String,
+    #[serde(default = "default_remote_dns")]
+    pub remote_dns: String,
+    #[serde(default = "default_bootstrap_dns")]
+    pub bootstrap_dns: String,
+    #[serde(default = "default_false")]
+    pub enable_fakeip: bool,
+    #[serde(default = "default_true")]
+    pub block_svcb: bool,
+    #[serde(default = "default_true")]
+    pub add_common_dns: bool,
+    #[serde(default)]
+    pub dns_hosts: String,
+    #[serde(default)]
+    pub custom_dns_json: String,
 }
+
+fn default_true() -> bool { true }
+fn default_false() -> bool { false }
+fn default_domestic_dns() -> String { "8.8.8.8".to_string() }
+fn default_remote_dns() -> String { "tcp://8.8.8.8".to_string() }
+fn default_bootstrap_dns() -> String { "8.8.8.8".to_string() }
+fn default_sniffing_types() -> Vec<String> { vec!["http".to_string(), "tls".to_string()] }
+fn default_bypass_list() -> String { "localhost;127.*;10.*;172.16.*;172.17.*;172.18.*;172.19.*;172.20.*;172.21.*;172.22.*;172.23.*;172.24.*;172.25.*;172.26.*;172.27.*;172.28.*;172.29.*;172.30.*;172.31.*;192.168.*".to_string() }
 
 impl Default for AppSettings {
     fn default() -> Self {
@@ -111,6 +239,23 @@ impl Default for AppSettings {
             mux_enabled: false,
             log_level: "warning".to_string(),
             docking: "None".to_string(),
+            enable_udp: true,
+            enable_sniffing: false,
+            sniffing_types: default_sniffing_types(),
+            allow_lan: false,
+            enable_fragment: false,
+            bypass_list: default_bypass_list(),
+            start_on_boot: false,
+            auto_update_geo: 0,
+            
+            domestic_dns: default_domestic_dns(),
+            remote_dns: default_remote_dns(),
+            bootstrap_dns: default_bootstrap_dns(),
+            enable_fakeip: false,
+            block_svcb: true,
+            add_common_dns: true,
+            dns_hosts: String::new(),
+            custom_dns_json: String::new(),
         }
     }
 }

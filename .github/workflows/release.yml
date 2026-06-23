@@ -1,68 +1,110 @@
-name: Release Build
+name: Build and Release MVP
 
 on:
   workflow_dispatch:
     inputs:
-      version_code:
-        description: 'Version Code (e.g., v1.0.0)'
+      version:
+        description: 'Release version (e.g., v0.1.0)'
         required: true
-        default: 'v1.0.0'
-      release_name:
-        description: 'Release Name (e.g., Initial Release)'
-        required: true
-        default: 'Initial Release'
-      tag_name:
-        description: 'Tag Name (e.g., v1.0.0)'
-        required: true
-        default: 'v1.0.0'
-      pre_release:
-        description: 'Pre-release Status'
-        required: true
-        type: boolean
-        default: false
+        default: 'v0.1.0'
 
 jobs:
-  build-and-release:
-    name: Build and Release for Windows
-    runs-on: windows-latest
-    permissions:
-      contents: write
+  build:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            xray_os: windows
+            xray_arch: 64
+            ext: .exe
+            zip_name: 2con-windows-amd64
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            xray_os: linux
+            xray_arch: 64
+            ext: ""
+            zip_name: 2con-linux-amd64
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            xray_os: macos
+            xray_arch: 64
+            ext: ""
+            zip_name: 2con-macos-amd64
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            xray_os: macos
+            xray_arch: arm64-v8a
+            ext: ""
+            zip_name: 2con-macos-arm64
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Setup Rust
+      - name: Install Rust Toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: x86_64-pc-windows-msvc
+          targets: ${{ matrix.target }}
 
-      - name: Build client_2con
-        run: cargo build --release
-
-      - name: Download Xray-core
-        shell: pwsh
+      - name: Install Linux Dependencies
+        if: runner.os == 'Linux'
         run: |
-          Invoke-WebRequest -Uri "https://github.com/XTLS/Xray-core/releases/latest/download/Xray-windows-64.zip" -OutFile "Xray-windows-64.zip"
-          Expand-Archive -Path "Xray-windows-64.zip" -DestinationPath "xray-temp"
-          New-Item -ItemType Directory -Force -Path "bundle"
-          Copy-Item -Path "xray-temp/xray.exe" -Destination "bundle/xray.exe"
-          Copy-Item -Path "xray-temp/geoip.dat" -Destination "bundle/geoip.dat"
-          Copy-Item -Path "xray-temp/geosite.dat" -Destination "bundle/geosite.dat"
-          Copy-Item -Path "target/release/client_2con.exe" -Destination "bundle/client_2con.exe"
+          sudo apt-get update
+          sudo apt-get install -y libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libfontconfig1-dev
 
-      - name: Zip Bundle
-        shell: pwsh
+      - name: Build UI Binary
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Download Xray Core
+        shell: bash
         run: |
-          Compress-Archive -Path "bundle/*" -DestinationPath "2con-windows-${{ github.event.inputs.version_code }}.zip"
+          XRAY_VERSION=$(curl -s https://api.github.com/repos/XTLS/Xray-core/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+          echo "Latest Xray version: $XRAY_VERSION"
+          ZIP_NAME="Xray-${{ matrix.xray_os }}-${{ matrix.xray_arch }}.zip"
+          curl -L -o xray.zip "https://github.com/XTLS/Xray-core/releases/download/${XRAY_VERSION}/${ZIP_NAME}"
+          unzip xray.zip xray${{ matrix.ext }} geoip.dat geosite.dat || unzip xray.zip xray${{ matrix.ext }}
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+      - name: Package Bundle
+        shell: bash
+        run: |
+          mkdir -p release_bundle
+          cp target/${{ matrix.target }}/release/client_2con${{ matrix.ext }} release_bundle/
+          cp xray${{ matrix.ext }} release_bundle/
+          [ -f geoip.dat ] && cp geoip.dat release_bundle/
+          [ -f geosite.dat ] && cp geosite.dat release_bundle/
+          cd release_bundle
+          if [ "${{ runner.os }}" == "Windows" ]; then
+            7z a ../${{ matrix.zip_name }}.zip *
+          else
+            zip -r ../${{ matrix.zip_name }}.zip *
+          fi
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
         with:
-          tag_name: ${{ github.event.inputs.tag_name }}
-          name: ${{ github.event.inputs.release_name }}
-          prerelease: ${{ github.event.inputs.pre_release }}
+          name: ${{ matrix.zip_name }}
+          path: ${{ matrix.zip_name }}.zip
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Create Release and Upload Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.version }}
+          name: Release ${{ github.event.inputs.version }}
           files: |
-            2con-windows-${{ github.event.inputs.version_code }}.zip
+            */*.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
