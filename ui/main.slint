@@ -41,6 +41,7 @@ export component MainWindow inherits Window {
     callback set_autopilot(bool);
     callback close_window();
     callback drag_window();
+    callback hamburger_clicked();
     callback select_proxy(string);
     callback import_proxy(string);
     callback delete_proxy(string);
@@ -179,22 +180,45 @@ export component MainWindow inherits Window {
                     vertical-alignment: center;
                 }
                 
-                // Close Button
-                IconButton {
-                    icon: @image-url("trash.svg"); // Reusing trash or an X icon. We'll use a standard slint trick or standard close icon later, for now let's just make it a danger button. Let's use a Text instead to make it an X since there's no close.svg
-                    visible: false;
-                }
-                Rectangle {
-                    width: 32px;
-                    height: 32px;
-                    border-radius: Theme.radius-small;
-                    background: close_touch.pressed ? Theme.danger-pressed : (close_touch.has-hover ? Theme.danger : transparent);
-                    animate background { duration: 150ms; }
+                HorizontalBox {
+                    alignment: end;
+                    spacing: 8px;
                     
-                    Text { text: "x"; color: Theme.text-primary; font-size: Theme.font-body-large; horizontal-alignment: center; vertical-alignment: center; }
-                    close_touch := TouchArea { 
-                        width: 100%; height: 100%;
-                        clicked => { root.close_window() } 
+                    // Hamburger Button
+                    Rectangle {
+                        width: 32px;
+                        height: 32px;
+                        border-radius: Theme.radius-small;
+                        background: hamburger_touch.pressed ? Theme.danger-pressed : (hamburger_touch.has-hover ? Theme.surface-hover : transparent);
+                        animate background { duration: 150ms; }
+                        
+                        VerticalLayout {
+                            alignment: center;
+                            spacing: 4px;
+                            padding-left: 8px; padding-right: 8px;
+                            Rectangle { height: 2px; width: 16px; background: Theme.text-primary; }
+                            Rectangle { height: 2px; width: 16px; background: Theme.text-primary; }
+                            Rectangle { height: 2px; width: 16px; background: Theme.text-primary; }
+                        }
+                        hamburger_touch := TouchArea { 
+                            width: 100%; height: 100%;
+                            clicked => { root.hamburger_clicked() } 
+                        }
+                    }
+                    
+                    // Close Button
+                    Rectangle {
+                        width: 32px;
+                        height: 32px;
+                        border-radius: Theme.radius-small;
+                        background: close_touch.pressed ? Theme.danger-pressed : (close_touch.has-hover ? Theme.danger : transparent);
+                        animate background { duration: 150ms; }
+                        
+                        HorizontalLayout { alignment: center; VerticalLayout { alignment: center; Text { text: "x"; color: Theme.text-primary; font-size: Theme.font-body-large; } } }
+                        close_touch := TouchArea { 
+                            width: 100%; height: 100%;
+                            clicked => { root.close_window() } 
+                        }
                     }
                 }
             }
@@ -216,8 +240,8 @@ export component MainWindow inherits Window {
                 
                 VerticalLayout {
                     padding: 20px;
-                    spacing: 20px;
-                    alignment: start;
+                    spacing: 16px;
+                    alignment: space-between;
                     
                     // Connection Status
                     VerticalLayout {
@@ -267,7 +291,6 @@ export component MainWindow inherits Window {
                     
                     // Real IP Display
                     HorizontalLayout {
-                        height: 20px;
                         alignment: end;
                         Text { text: root.current_ip; color: Theme.text-primary; font-size: Theme.font-caption; font-weight: 600; horizontal-alignment: right; }
                     }
@@ -325,7 +348,7 @@ export component MainWindow inherits Window {
                             spacing: 0px;
                             alignment: start;
                             
-                            Rectangle { height: 28px; Text { text: "PREFERENCES"; color: Theme.text-muted; font-size: Theme.font-caption; font-weight: 700; x: 8px; vertical-alignment: center; } }
+                            HorizontalLayout { padding-left: 12px; height: 28px; Text { text: "PREFERENCES"; color: Theme.text-muted; font-size: Theme.font-caption; font-weight: 700; vertical-alignment: center; } }
                             SidebarItem { text: "General"; is_active: root.active_settings_tab == 0; clicked => { root.active_settings_tab = 0; } }
                             SidebarItem { text: "V2Ray Core"; is_active: root.active_settings_tab == 1; clicked => { root.active_settings_tab = 1; } }
                             SidebarItem { text: "Routing"; is_active: root.active_settings_tab == 4; clicked => { root.active_settings_tab = 4; } }
@@ -333,15 +356,15 @@ export component MainWindow inherits Window {
                             
                             Rectangle { height: 16px; } // spacer
                             
-                            Rectangle { height: 28px; Text { text: "MANAGEMENT"; color: Theme.text-muted; font-size: Theme.font-caption; font-weight: 700; x: 8px; vertical-alignment: center; } }
+                            HorizontalLayout { padding-left: 12px; height: 28px; Text { text: "MANAGEMENT"; color: Theme.text-muted; font-size: Theme.font-caption; font-weight: 700; vertical-alignment: center; } }
                             SidebarItem { text: "Configs"; is_active: root.active_settings_tab == 2; clicked => { root.active_settings_tab = 2; } }
                             SidebarItem { text: "Subscriptions"; is_active: root.active_settings_tab == 3; clicked => { root.active_settings_tab = 3; } }
                             SidebarItem { text: "Logs"; is_active: root.active_settings_tab == 6; clicked => { root.active_settings_tab = 6; } }
                             
                             Rectangle { horizontal-stretch: 1; vertical-stretch: 1; }
                             
-                            Rectangle { height: 28px; Text { text: "About"; color: Theme.text-secondary; font-size: Theme.font-sub; x: 8px; vertical-alignment: center; } }
-                            Text { text: "2con Client v0.1.0\nHigh-performance proxy client built with Rust & Slint."; color: Theme.text-muted; font-size: Theme.font-sub; wrap: word-wrap; x: 8px; }
+                            HorizontalLayout { padding-left: 12px; height: 28px; Text { text: "About"; color: Theme.text-secondary; font-size: Theme.font-sub; vertical-alignment: center; } }
+                            HorizontalLayout { padding-left: 12px; Text { text: "2con Client v0.1.0\nHigh-performance proxy client built with Rust & Slint."; color: Theme.text-muted; font-size: Theme.font-sub; wrap: word-wrap; } }
                         }
                     }
                     
@@ -357,7 +380,7 @@ export component MainWindow inherits Window {
                             animate opacity { duration: 150ms; }
                             viewport_height: gen_content.preferred-height;
                             gen_content := VerticalBox {
-                                padding-left: 10px; padding-right: 20px; padding-top: 20px; padding-bottom: 20px; spacing: 16px; alignment: start;
+                                padding-left: 20px; padding-right: 20px; padding-top: 20px; padding-bottom: 20px; spacing: 16px; alignment: start;
                                 Text { text: "General Settings"; color: Theme.text-primary; font-size: Theme.font-title; font-weight: 700; }
                                 
                                 AppSectionCard {
@@ -401,7 +424,7 @@ export component MainWindow inherits Window {
                             animate opacity { duration: 150ms; }
                             viewport_height: v2ray_content.preferred-height;
                             v2ray_content := VerticalBox {
-                                padding-left: 10px; padding-right: 20px; padding-top: 20px; padding-bottom: 20px; spacing: 16px; alignment: start;
+                                padding-left: 20px; padding-right: 20px; padding-top: 20px; padding-bottom: 20px; spacing: 16px; alignment: start;
                                 Text { text: "V2Ray Core Settings"; color: Theme.text-primary; font-size: Theme.font-title; font-weight: 700; }
                                 
                                 AppSectionCard {
@@ -436,7 +459,7 @@ export component MainWindow inherits Window {
                             opacity: root.active_settings_tab == 2 ? 1 : 0;
                             visible: self.opacity > 0;
                             animate opacity { duration: 150ms; }
-                            padding-left: 10px; padding-right: 20px; padding-top: 20px; padding-bottom: 20px; spacing: 12px;
+                            padding-left: 20px; padding-right: 20px; padding-top: 20px; padding-bottom: 20px; spacing: 12px;
                             
                             HorizontalBox {
                                 Text { text: "Config Management"; color: Theme.text-primary; font-size: Theme.font-header; font-weight: 700; vertical-alignment: center; }
@@ -533,7 +556,7 @@ export component MainWindow inherits Window {
                             opacity: root.active_settings_tab == 3 ? 1 : 0;
                             visible: self.opacity > 0;
                             animate opacity { duration: 150ms; }
-                            padding-left: 10px; padding-right: 20px; padding-top: 20px; padding-bottom: 20px; spacing: 12px;
+                            padding-left: 20px; padding-right: 20px; padding-top: 20px; padding-bottom: 20px; spacing: 12px;
                             
                             HorizontalBox {
                                 Text { text: "Subscriptions"; color: Theme.text-primary; font-size: Theme.font-header; font-weight: 700; vertical-alignment: center; }
@@ -563,6 +586,7 @@ export component MainWindow inherits Window {
                                     height: 130px;
                                     Rectangle {
                                         height: 120px; y: 5px; border-radius: Theme.radius-large; background: Theme.surface-raised; border-width: 1px; border-color: Theme.border;
+                                        HorizontalLayout { padding: 12px; Rectangle { background: transparent; } }
                                         VerticalBox {
                                             padding: 14px; spacing: 8px;
                                             Text { text: item.url; color: Theme.text-primary; font-size: Theme.font-body; font-weight: 600; overflow: elide; }
@@ -587,7 +611,7 @@ export component MainWindow inherits Window {
                             animate opacity { duration: 150ms; }
                             viewport_height: route_content.preferred-height;
                             route_content := VerticalBox {
-                                padding-left: 10px; padding-right: 20px; padding-top: 20px; padding-bottom: 20px; spacing: 16px; alignment: start;
+                                padding-left: 20px; padding-right: 20px; padding-top: 20px; padding-bottom: 20px; spacing: 16px; alignment: start;
                                 Text { text: "Routing Settings"; color: Theme.text-primary; font-size: Theme.font-title; font-weight: 700; }
                                 
                                 AppSectionCard {
@@ -614,7 +638,7 @@ export component MainWindow inherits Window {
                             animate opacity { duration: 150ms; }
                             viewport_height: dns_content.preferred-height;
                             dns_content := VerticalBox {
-                                padding-left: 10px; padding-right: 20px; padding-top: 20px; padding-bottom: 20px; spacing: 16px; alignment: start;
+                                padding-left: 20px; padding-right: 20px; padding-top: 20px; padding-bottom: 20px; spacing: 16px; alignment: start;
                                 Text { text: "DNS Settings"; color: Theme.text-primary; font-size: Theme.font-title; font-weight: 700; }
                                 
                                 AppSectionCard {
@@ -647,7 +671,7 @@ export component MainWindow inherits Window {
                             opacity: root.active_settings_tab == 6 ? 1 : 0;
                             visible: self.opacity > 0;
                             animate opacity { duration: 150ms; }
-                            padding-left: 10px; padding-right: 20px; padding-top: 20px; padding-bottom: 20px; spacing: 12px;
+                            padding-left: 20px; padding-right: 20px; padding-top: 20px; padding-bottom: 20px; spacing: 12px;
                             
                             HorizontalBox {
                                 alignment: start;

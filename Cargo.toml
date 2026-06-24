@@ -3,6 +3,11 @@ name = "client_2con"
 version = "0.1.0"
 edition = "2024"
 
+[[bin]]
+name = "client_2con"
+path = "src/main.rs"
+required-features = ["gui"]
+
 [dependencies]
 slint = { version = "1.9", features = ["backend-winit"] }
 tokio = { version = "1", features = ["full"] }

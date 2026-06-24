@@ -31,7 +31,7 @@ Add-Type -TypeDefinition $code
         let err = String::from_utf8_lossy(&output.stderr);
         return Err(format!("PowerShell error: {}", err));
     }
-    
+
     Ok(())
 }
 
@@ -56,9 +56,9 @@ pub fn enable_system_proxy(port: u16) -> Result<(), String> {
         let err = String::from_utf8_lossy(&output.stderr);
         return Err(format!("PowerShell error: {}", err));
     }
-    
+
     refresh_proxy()?;
-    
+
     Ok(())
 }
 
@@ -78,8 +78,52 @@ pub fn disable_system_proxy() -> Result<(), String> {
         let err = String::from_utf8_lossy(&output.stderr);
         return Err(format!("PowerShell error: {}", err));
     }
-    
+
     refresh_proxy()?;
-    
+
+    Ok(())
+}
+
+pub fn enable_auto_start() -> Result<(), String> {
+    let current_exe = std::env::current_exe()
+        .map_err(|e| format!("Failed to get current exe path: {}", e))?;
+    let exe_str = current_exe.to_str()
+        .ok_or_else(|| "Failed to convert path to string".to_string())?;
+
+    let script = format!(
+        r#"Set-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name '2con_client' -Value '"{}"'"#,
+        exe_str
+    );
+
+    let output = Command::new("powershell")
+        .arg("-NoProfile")
+        .arg("-Command")
+        .arg(&script)
+        .output()
+        .map_err(|e| format!("Failed to execute powershell: {}", e))?;
+
+    if !output.status.success() {
+        let err = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("PowerShell error: {}", err));
+    }
+
+    Ok(())
+}
+
+pub fn disable_auto_start() -> Result<(), String> {
+    let script = r#"Remove-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name '2con_client' -ErrorAction SilentlyContinue"#;
+
+    let output = Command::new("powershell")
+        .arg("-NoProfile")
+        .arg("-Command")
+        .arg(script)
+        .output()
+        .map_err(|e| format!("Failed to execute powershell: {}", e))?;
+
+    if !output.status.success() {
+        let err = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("PowerShell error: {}", err));
+    }
+
     Ok(())
 }

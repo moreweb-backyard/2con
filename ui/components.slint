@@ -212,15 +212,17 @@ export component SidebarItem inherits Rectangle {
     
     animate background { duration: 150ms; }
 
-    Text {
-        text: root.text;
-        color: is_active ? Theme.text-accent : (touch.has-hover ? Theme.text-primary : Theme.text-secondary);
-        font-size: Theme.font-body;
-        font-weight: is_active ? 700 : 500;
-        x: 8px;
-        vertical-alignment: center;
-        height: 100%;
-        animate color { duration: 150ms; }
+    HorizontalLayout {
+        padding-left: 12px;
+        Text {
+            text: root.text;
+            color: is_active ? Theme.text-accent : (touch.has-hover ? Theme.text-primary : Theme.text-secondary);
+            font-size: Theme.font-body;
+            font-weight: is_active ? 700 : 500;
+            vertical-alignment: center;
+            height: 100%;
+            animate color { duration: 150ms; }
+        }
     }
 
     focus_scope := FocusScope {
@@ -263,7 +265,7 @@ export component GlassActionCard inherits Rectangle {
         Rectangle {
             width: 44px; height: 44px; border-radius: 22px;
             background: #bf00ff22;
-            Image { source: root.icon; colorize: Theme.secondary; width: 20px; height: 20px; x: 12px; y: 12px; }
+            HorizontalLayout { alignment: center; VerticalLayout { alignment: center; Image { source: root.icon; colorize: Theme.secondary; width: 20px; height: 20px; } } }
         }
 
         VerticalLayout {
@@ -319,8 +321,8 @@ export component AppSectionCard inherits Rectangle {
     border-width: 0px;
     
     VerticalLayout {
-        padding-top: 10px;
-        padding-bottom: 20px;
+        padding-top: 16px;
+        padding-bottom: 16px;
         spacing: 12px;
         
         VerticalLayout {
@@ -417,7 +419,7 @@ export component EmptyState inherits VerticalLayout {
     Rectangle {
         width: 64px; height: 64px; border-radius: 32px;
         background: Theme.surface-raised;
-        Image { source: root.icon; colorize: Theme.text-muted; width: 32px; height: 32px; x: 16px; y: 16px; }
+        HorizontalLayout { alignment: center; VerticalLayout { alignment: center; Image { source: root.icon; colorize: Theme.text-muted; width: 32px; height: 32px; } } }
     }
     
     VerticalLayout {
@@ -485,7 +487,7 @@ export component ModalShell inherits Rectangle {
                     width: 24px; height: 24px; border-radius: 12px;
                     background: close_touch.has-hover ? Theme.surface-hover : transparent;
                     animate background { duration: 150ms; }
-                    Text { text: "×"; color: Theme.text-secondary; font-size: 20px; font-weight: 300; horizontal-alignment: center; vertical-alignment: center; y: -2px; }
+                    HorizontalLayout { alignment: center; VerticalLayout { alignment: center; Text { text: "×"; color: Theme.text-secondary; font-size: 20px; font-weight: 300; } } }
                     close_touch := TouchArea { clicked => { root.close_clicked() } }
                 }
             }

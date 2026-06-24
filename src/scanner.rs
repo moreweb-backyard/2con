@@ -21,7 +21,7 @@ pub async fn test_ip(ip: &str, port: u16, timeout_ms: u64) -> ScanResult {
 
     let start = Instant::now();
     let addr = format!("{}:{}", ip, port);
-    
+
     // Step 1: TCP Connect
     let tcp_conn = timeout(Duration::from_millis(timeout_ms), TcpStream::connect(&addr)).await;
     match tcp_conn {
@@ -42,7 +42,7 @@ pub async fn test_ip(ip: &str, port: u16, timeout_ms: u64) -> ScanResult {
     if let Ok(client) = client {
         let scheme = if port == 80 { "http" } else { "https" };
         let url = format!("{}://speed.cloudflare.com/cdn-cgi/trace", scheme);
-        
+
         if let Ok(resp) = client.get(&url).send().await {
             if resp.status().is_success() {
                 if let Ok(text) = resp.text().await {
