@@ -4,6 +4,9 @@ use std::sync::Mutex;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 
+#[path = "../src/error.rs"]
+pub mod error;
+
 #[path = "../src/config.rs"]
 pub mod config;
 
@@ -467,14 +470,14 @@ async fn test_tier4_real_world_application() {
 
     let vless_config = config::ProxyConfig::parse(&vless_prof.raw_link).unwrap();
     let xray_vless =
-        proxy::generate_xray_config(&vless_config, &vless_config.addresses[0], &default_settings);
+        proxy::generate_xray_config(&vless_config, &vless_config.addresses[0], &default_settings).unwrap();
 
     let trojan_config = config::ProxyConfig::parse(&trojan_prof.raw_link).unwrap();
     let xray_trojan = proxy::generate_xray_config(
         &trojan_config,
         &trojan_config.addresses[0],
         &default_settings,
-    );
+    ).unwrap();
 
     // Assert generated Xray JSON configuration has correct address, port, protocol, and streamSettings (TLS/SNI/etc.)
 

@@ -15,6 +15,33 @@ fn default_sub_group() -> String {
     "Personal".to_string()
 }
 
+pub fn url_decode(input: &str) -> String {
+    let mut bytes = Vec::new();
+    let mut chars = input.as_bytes().iter().peekable();
+    while let Some(&b) = chars.next() {
+        if b == b'%' {
+            if let (Some(&h1), Some(&h2)) = (chars.next(), chars.next()) {
+                if let Ok(hex_str) = std::str::from_utf8(&[h1, h2]) {
+                    if let Ok(byte) = u8::from_str_radix(hex_str, 16) {
+                        bytes.push(byte);
+                        continue;
+                    }
+                }
+                bytes.push(b'%');
+                bytes.push(h1);
+                bytes.push(h2);
+            } else {
+                bytes.push(b'%');
+            }
+        } else if b == b'+' {
+            bytes.push(b' ');
+        } else {
+            bytes.push(b);
+        }
+    }
+    String::from_utf8_lossy(&bytes).into_owned()
+}
+
 pub fn robust_base64_decode(input: &str) -> Result<Vec<u8>, String> {
     use base64::Engine;
     let mut cleaned: String = input.chars().filter(|c| !c.is_whitespace()).collect();
@@ -65,7 +92,12 @@ pub struct ProxyConfig {
     pub pbk: String,
     pub sid: String,
     pub fp: String,
+    pub spx: String,
     pub flow: String,
+    pub header_type: String,
+    pub seed: String,
+    pub quic_security: String,
+    pub key: String,
     pub public_key: String,
     pub local_address: Vec<String>,
     pub mtu: Option<u32>,
@@ -79,32 +111,43 @@ impl ProxyConfig {
             if let Ok(decoded) = robust_base64_decode(b64) {
                 if let Ok(json_str) = String::from_utf8(decoded) {
                     if let Ok(val) = serde_json::from_str::<serde_json::Value>(&json_str) {
-                        return Some(ProxyConfig {
-                            protocol: "vmess".to_string(),
-                            addresses: vec![val["add"].as_str().unwrap_or("").to_string()],
-                            port: val["port"]
-                                .as_u64()
-                                .or_else(|| val["port"].as_str().and_then(|s| s.parse().ok()))
-                                .unwrap_or(443) as u16,
-                            uuid: val["id"].as_str().unwrap_or("").to_string(),
-                            hostname: val["host"].as_str().unwrap_or("").to_string(),
-                            path: val["path"].as_str().unwrap_or("").to_string(),
-                            tls: val["tls"].as_str().unwrap_or("").to_string(),
-                            sni: val["sni"]
-                                .as_str()
-                                .or(val["host"].as_str())
-                                .unwrap_or("")
-                                .to_string(),
-                            transport: val["net"].as_str().unwrap_or("tcp").to_string(),
-                            pbk: String::new(),
-                            sid: String::new(),
-                            fp: String::new(),
-                            flow: String::new(),
-                            public_key: String::new(),
-                            local_address: Vec::new(),
-                            mtu: None,
-                            reserved: None,
-                        });
+                        let uuid = val["id"].as_str().unwrap_or("").to_string();
+                        let address = val["add"].as_str().unwrap_or("").to_string();
+                        let port = val["port"]
+                            .as_u64()
+                            .or_else(|| val["port"].as_str().and_then(|s| s.parse().ok()))
+                            .unwrap_or(443) as u16;
+
+                        if !uuid.is_empty() && !address.is_empty() && port > 0 {
+                            return Some(ProxyConfig {
+                                protocol: "vmess".to_string(),
+                                addresses: vec![address],
+                                port,
+                                uuid,
+                                hostname: val["host"].as_str().unwrap_or("").to_string(),
+                                path: val["path"].as_str().unwrap_or("").to_string(),
+                                tls: val["tls"].as_str().unwrap_or("").to_string(),
+                                sni: val["sni"]
+                                    .as_str()
+                                    .or(val["host"].as_str())
+                                    .unwrap_or("")
+                                    .to_string(),
+                                transport: val["net"].as_str().unwrap_or("tcp").to_string(),
+                                pbk: val["pbk"].as_str().unwrap_or("").to_string(),
+                                sid: val["sid"].as_str().unwrap_or("").to_string(),
+                                fp: val["fp"].as_str().unwrap_or("").to_string(),
+                                spx: val["spx"].as_str().unwrap_or("").to_string(),
+                                flow: val["flow"].as_str().unwrap_or("").to_string(),
+                                header_type: val["type"].as_str().unwrap_or("").to_string(),
+                                seed: val["seed"].as_str().unwrap_or("").to_string(),
+                                quic_security: val["quicSecurity"].as_str().unwrap_or("").to_string(),
+                                key: val["key"].as_str().unwrap_or("").to_string(),
+                                public_key: String::new(),
+                                local_address: Vec::new(),
+                                mtu: None,
+                                reserved: None,
+                            });
+                        }
                     }
                 }
             }
@@ -114,28 +157,41 @@ impl ProxyConfig {
             let mut port_part = String::new();
             let mut method_pass = String::new();
 
-            if let Some(at_idx) = link.find('@') {
-                // ss://BASE64@host:port#name
-                let b64 = &link[5..at_idx];
+            let (without_fragment, _name) = if let Some(hash_idx) = link.find('#') {
+                (&link[..hash_idx], url_decode(&link[hash_idx + 1..]))
+            } else {
+                (link, String::new())
+            };
+
+            let raw_content = &without_fragment[5..];
+            if let Some(at_idx) = raw_content.find('@') {
+                let b64 = &raw_content[..at_idx];
                 if let Ok(decoded) = robust_base64_decode(b64) {
                     if let Ok(decoded_str) = String::from_utf8(decoded) {
                         method_pass = decoded_str;
                     }
+                } else {
+                    method_pass = b64.to_string();
                 }
 
-                let remainder = &link[at_idx + 1..];
-                let end_idx = remainder.find('#').unwrap_or(remainder.len());
-                let host_port = &remainder[..end_idx];
+                let remainder = &raw_content[at_idx + 1..];
+                let host_port = if let Some(q_idx) = remainder.find('?') {
+                    &remainder[..q_idx]
+                } else if let Some(s_idx) = remainder.find('/') {
+                    &remainder[..s_idx]
+                } else {
+                    remainder
+                };
 
                 if let Some(colon) = host_port.rfind(':') {
                     host_part = host_port[..colon].to_string();
                     port_part = host_port[colon + 1..].to_string();
+                } else {
+                    host_part = host_port.to_string();
+                    port_part = "443".to_string();
                 }
             } else {
-                // ss://BASE64#name
-                let end_idx = link.find('#').unwrap_or(link.len());
-                let b64 = &link[5..end_idx];
-                if let Ok(decoded) = robust_base64_decode(b64) {
+                if let Ok(decoded) = robust_base64_decode(raw_content) {
                     if let Ok(decoded_str) = String::from_utf8(decoded) {
                         if let Some(at_idx) = decoded_str.rfind('@') {
                             method_pass = decoded_str[..at_idx].to_string();
@@ -143,18 +199,23 @@ impl ProxyConfig {
                             if let Some(colon) = host_port.rfind(':') {
                                 host_part = host_port[..colon].to_string();
                                 port_part = host_port[colon + 1..].to_string();
+                            } else {
+                                host_part = host_port.to_string();
+                                port_part = "443".to_string();
                             }
                         }
                     }
                 }
             }
 
-            if !host_part.is_empty() && !port_part.is_empty() {
+            let port = port_part.parse().unwrap_or(443);
+
+            if !host_part.is_empty() && port > 0 && !method_pass.is_empty() {
                 return Some(ProxyConfig {
                     protocol: "shadowsocks".to_string(),
                     addresses: vec![host_part],
-                    port: port_part.parse().unwrap_or(443),
-                    uuid: method_pass, // we use uuid to store method:password for simplicity
+                    port,
+                    uuid: method_pass,
                     hostname: "".to_string(),
                     path: "".to_string(),
                     tls: "".to_string(),
@@ -163,7 +224,12 @@ impl ProxyConfig {
                     pbk: String::new(),
                     sid: String::new(),
                     fp: String::new(),
+                    spx: String::new(),
                     flow: String::new(),
+                    header_type: String::new(),
+                    seed: String::new(),
+                    quic_security: String::new(),
+                    key: String::new(),
                     public_key: String::new(),
                     local_address: Vec::new(),
                     mtu: None,
@@ -180,7 +246,6 @@ impl ProxyConfig {
             let url = Url::parse(link).ok()?;
             let uuid = url.username().to_string();
 
-            // Host could be multiple addresses separated by comma
             let host_str = url.host_str()?;
             let addresses: Vec<String> = host_str.split(',').map(|s| s.to_string()).collect();
 
@@ -194,19 +259,29 @@ impl ProxyConfig {
             let mut pbk = String::new();
             let mut sid = String::new();
             let mut fp = String::new();
+            let mut spx = String::new();
             let mut flow = String::new();
+            let mut header_type = String::new();
+            let mut seed = String::new();
+            let mut quic_security = String::new();
+            let mut key_param = String::new();
 
             for (key, value) in url.query_pairs() {
                 match key.as_ref() {
                     "host" => hostname = value.to_string(),
-                    "path" => path = value.to_string(),
+                    "path" => path = url_decode(&value),
                     "security" => tls = value.to_string(),
                     "sni" => sni = value.to_string(),
                     "type" => transport = value.to_string(),
                     "pbk" => pbk = value.to_string(),
                     "sid" => sid = value.to_string(),
                     "fp" => fp = value.to_string(),
+                    "spx" => spx = value.to_string(),
                     "flow" => flow = value.to_string(),
+                    "headerType" => header_type = value.to_string(),
+                    "seed" => seed = value.to_string(),
+                    "quicSecurity" => quic_security = value.to_string(),
+                    "key" => key_param = value.to_string(),
                     _ => {}
                 }
             }
@@ -215,25 +290,33 @@ impl ProxyConfig {
                 transport = "tcp".to_string();
             }
 
-            Some(ProxyConfig {
-                protocol: protocol.to_string(),
-                addresses,
-                port,
-                uuid,
-                hostname,
-                path,
-                tls,
-                sni,
-                transport,
-                pbk,
-                sid,
-                fp,
-                flow,
-                public_key: String::new(),
-                local_address: Vec::new(),
-                mtu: None,
-                reserved: None,
-            })
+            if !uuid.is_empty() && !addresses.is_empty() && port > 0 {
+                return Some(ProxyConfig {
+                    protocol: protocol.to_string(),
+                    addresses,
+                    port,
+                    uuid,
+                    hostname,
+                    path,
+                    tls,
+                    sni,
+                    transport,
+                    pbk,
+                    sid,
+                    fp,
+                    spx,
+                    flow,
+                    header_type,
+                    seed,
+                    quic_security,
+                    key: key_param,
+                    public_key: String::new(),
+                    local_address: Vec::new(),
+                    mtu: None,
+                    reserved: None,
+                });
+            }
+            return None;
         } else if link.starts_with("wg://") {
             let url = Url::parse(link).ok()?;
             let uuid = url.username().to_string();
@@ -263,25 +346,33 @@ impl ProxyConfig {
                 }
             }
 
-            Some(ProxyConfig {
-                protocol: "wireguard".to_string(),
-                addresses,
-                port,
-                uuid,
-                hostname: String::new(),
-                path: String::new(),
-                tls: String::new(),
-                sni: String::new(),
-                transport: String::new(),
-                pbk: String::new(),
-                sid: String::new(),
-                fp: String::new(),
-                flow: String::new(),
-                public_key,
-                local_address,
-                mtu,
-                reserved,
-            })
+            if !uuid.is_empty() && !addresses.is_empty() && port > 0 && !public_key.is_empty() {
+                return Some(ProxyConfig {
+                    protocol: "wireguard".to_string(),
+                    addresses,
+                    port,
+                    uuid,
+                    hostname: String::new(),
+                    path: String::new(),
+                    tls: String::new(),
+                    sni: String::new(),
+                    transport: String::new(),
+                    pbk: String::new(),
+                    sid: String::new(),
+                    fp: String::new(),
+                    spx: String::new(),
+                    flow: String::new(),
+                    header_type: String::new(),
+                    seed: String::new(),
+                    quic_security: String::new(),
+                    key: String::new(),
+                    public_key,
+                    local_address,
+                    mtu,
+                    reserved,
+                });
+            }
+            return None;
         } else {
             None
         }
@@ -311,6 +402,12 @@ pub struct AppSettings {
     pub mux_enabled: bool,
     pub log_level: String,
     pub docking: String, // "None", "Top Left", "Top Right", "Bottom Left", "Bottom Right"
+
+    // Persistence
+    #[serde(default)]
+    pub active_config_id: String,
+    #[serde(default)]
+    pub auto_connect: bool,
 
     // Advanced Core
     #[serde(default = "default_true")]
@@ -382,6 +479,8 @@ impl Default for AppSettings {
             mux_enabled: false,
             log_level: "warning".to_string(),
             docking: "None".to_string(),
+            active_config_id: String::new(),
+            auto_connect: false,
             enable_udp: true,
             enable_sniffing: false,
             sniffing_types: default_sniffing_types(),

@@ -1,6 +1,6 @@
 import { Button, CheckBox, ComboBox, GroupBox, LineEdit, TextEdit, Switch, VerticalBox, HorizontalBox, ListView, ScrollView } from "std-widgets.slint";
 import { Theme } from "theme.slint";
-import { PremiumButton, PremiumSwitch, IconButton, SidebarItem, GlassActionCard, PremiumScrollView, AppSectionCard, AppTextField, AppComboBox, StatusBadge, EmptyState, LoadingIndicator, ModalShell } from "components.slint";
+import { PremiumButton, PremiumSwitch, IconButton, SidebarItem, GlassActionCard, PremiumScrollView, AppSectionCard, AppTextField, AppComboBox, StatusBadge, EmptyState, LoadingIndicator, ModalShell, ErrorBanner } from "components.slint";
 
 export struct ProxyItem {
     id: string,
@@ -90,6 +90,14 @@ export component MainWindow inherits Window {
     in-out property <bool> autopilot_enabled: false;
     in-out property <string> active_config_name: "Select Configuration";
     in-out property <bool> is_scanning: false;
+    
+    in-out property <string> error_message: "";
+    in-out property <string> error_level: "error";
+    in-out property <bool> auto_connect: false;
+    in-out property <string> connection_state: "disconnected";
+    in-out property <string> connection_duration: "00:00:00";
+    in-out property <string> sub_update_progress: "";
+    in-out property <bool> is_windows: true;
     
     in-out property <string> app_logs: "2con Client Initialized...\n";
     callback clear_logs();
@@ -214,7 +222,7 @@ export component MainWindow inherits Window {
                         background: close_touch.pressed ? Theme.danger-pressed : (close_touch.has-hover ? Theme.danger : transparent);
                         animate background { duration: 150ms; }
                         
-                        HorizontalLayout { alignment: center; VerticalLayout { alignment: center; Text { text: "x"; color: Theme.text-primary; font-size: Theme.font-body-large; } } }
+                        HorizontalLayout { alignment: center; VerticalLayout { alignment: center; Text { text: "×"; color: Theme.text-secondary; font-size: Theme.font-body-large; } } }
                         close_touch := TouchArea { 
                             width: 100%; height: 100%;
                             clicked => { root.close_window() } 
@@ -249,13 +257,14 @@ export component MainWindow inherits Window {
                         spacing: 4px;
                         height: 60px;
                         Text { 
-                            text: root.is_scanning ? "Scanning Cloudflare..." : (root.active_config_name == "Select Configuration" ? "No Proxy Selected" : (root.connected ? "Connected" : "Disconnected")); 
-                            color: root.is_scanning ? Theme.secondary : (root.active_config_name == "Select Configuration" ? Theme.warning : (root.connected ? Theme.primary : Theme.text-secondary)); 
+                            text: root.is_scanning ? "Scanning Cloudflare..." : (root.connection_state == "connecting" ? "Connecting..." : (root.active_config_name == "Select Configuration" ? "No Proxy Selected" : (root.connected ? "Connected" : "Disconnected"))); 
+                            color: root.is_scanning ? Theme.secondary : (root.connection_state == "connecting" ? Theme.warning : (root.active_config_name == "Select Configuration" ? Theme.warning : (root.connected ? Theme.primary : Theme.text-secondary))); 
                             font-size: Theme.font-title; 
                             horizontal-alignment: center; 
                             font-weight: 700; 
                         }
                         Text { text: "Latency: " + root.latency; color: Theme.text-muted; font-size: Theme.font-sub; horizontal-alignment: center; }
+                        if root.connection_state == "connected" : Text { text: "Duration: " + root.connection_duration; color: Theme.secondary; font-size: Theme.font-sub; horizontal-alignment: center; font-weight: 600; }
                     }
                     
                     // Power Button
@@ -267,17 +276,22 @@ export component MainWindow inherits Window {
                                 width: 120px;
                                 height: 120px;
                                 border-radius: 60px;
-                                background: root.connected ? Theme.secondary : Theme.surface-raised;
-                                drop-shadow-blur: 0px;
-                                animate background, drop-shadow-color { duration: 300ms; }
+                                background: root.connection_state == "connected" ? Theme.secondary : (root.connection_state == "connecting" ? Theme.warning : Theme.surface-raised);
+                                drop-shadow-blur: root.connection_state == "connected" ? 12px + sin((animation-tick() / 150ms) * 1deg) * 6px : 0px;
+                                drop-shadow-color: root.connection_state == "connected" ? Theme.secondary : transparent;
+                                animate background, drop-shadow-blur { duration: 150ms; }
                                 
-                                Image {
-                                    source: @image-url("power.svg");
-                                    colorize: root.connected ? #1c1c1e : Theme.text-muted;
-                                    width: 52px;
-                                    height: 52px;
-                                    x: (parent.width - self.width) / 2;
-                                    y: (parent.height - self.height) / 2;
+                                HorizontalLayout {
+                                    alignment: center;
+                                    VerticalLayout {
+                                        alignment: center;
+                                        Image {
+                                            source: @image-url("power.svg");
+                                            colorize: root.connection_state == "connected" ? #030005 : (root.connection_state == "connecting" ? #030005 : Theme.text-muted);
+                                            width: Theme.icon-xlarge;
+                                            height: Theme.icon-xlarge;
+                                        }
+                                    }
                                 }
                                 
                                 TouchArea { 
@@ -291,8 +305,10 @@ export component MainWindow inherits Window {
                     
                     // Real IP Display
                     HorizontalLayout {
-                        alignment: end;
-                        Text { text: root.current_ip; color: Theme.text-primary; font-size: Theme.font-caption; font-weight: 600; horizontal-alignment: right; }
+                        alignment: space-between;
+                        if root.connection_state == "connected" : Text { text: "Endpoint: " + root.current_ip; color: Theme.text-muted; font-size: Theme.font-caption; }
+                        if root.connection_state != "connected" : Rectangle { }
+                        Text { text: root.connection_state == "connected" ? "Active" : "Offline"; color: root.connection_state == "connected" ? Theme.success : Theme.text-muted; font-size: Theme.font-caption; font-weight: 600; }
                     }
                     
                     // Location Selector
@@ -310,7 +326,13 @@ export component MainWindow inherits Window {
                             
                             Rectangle {
                                 width: 30px; height: 30px; border-radius: 15px; background: Theme.surface-hover;
-                                Image { source: @image-url("globe.svg"); colorize: Theme.text-primary; width: 16px; height: 16px; x: 7px; y: 7px; }
+                                HorizontalLayout {
+                                    alignment: center;
+                                    VerticalLayout {
+                                        alignment: center;
+                                        Image { source: @image-url("globe.svg"); colorize: Theme.text-primary; width: Theme.icon-small; height: Theme.icon-small; }
+                                    }
+                                }
                             }
                             
                             Text { text: root.active_config_name; color: Theme.text-primary; font-size: Theme.font-body; font-weight: 500; vertical-alignment: center; horizontal-stretch: 1; overflow: elide; }
@@ -379,19 +401,24 @@ export component MainWindow inherits Window {
                             visible: self.opacity > 0;
                             animate opacity { duration: 150ms; }
                             viewport_height: gen_content.preferred-height;
-                            gen_content := VerticalBox {
+                            gen_content := VerticalLayout {
                                 padding-left: 20px; padding-right: 20px; padding-top: 20px; padding-bottom: 20px; spacing: 16px; alignment: start;
                                 Text { text: "General Settings"; color: Theme.text-primary; font-size: Theme.font-title; font-weight: 700; }
                                 
                                 AppSectionCard {
                                     title: "Application Behavior";
                                     description: "Configure how the application runs on your system.";
-                                    HorizontalBox {
+                                    HorizontalLayout {
                                         Text { text: "Autopilot Mode"; color: Theme.text-primary; vertical-alignment: center; font-size: Theme.font-body-large; }
                                         Rectangle { horizontal-stretch: 1; }
                                         PremiumSwitch { checked: root.autopilot_enabled; toggled => { root.set_autopilot(self.checked); } }
                                     }
-                                    HorizontalBox {
+                                    HorizontalLayout {
+                                        Text { text: "Auto-Connect on Startup"; color: Theme.text-primary; vertical-alignment: center; font-size: Theme.font-body-large; }
+                                        Rectangle { horizontal-stretch: 1; }
+                                        PremiumSwitch { checked <=> root.auto_connect; toggled => { root.settings_changed(); } }
+                                    }
+                                    HorizontalLayout {
                                         Text { text: "Start on Boot (Coming Soon)"; color: Theme.text-primary; vertical-alignment: center; font-size: Theme.font-body-large; }
                                         Rectangle { horizontal-stretch: 1; }
                                         PremiumSwitch { enabled: false; checked <=> root.start_on_boot; toggled => { root.settings_changed(); } }
@@ -401,14 +428,15 @@ export component MainWindow inherits Window {
                                 AppSectionCard {
                                     title: "Appearance & Updates";
                                     description: "Control visual preferences and update intervals.";
-                                    VerticalBox {
+                                    VerticalLayout {
                                         spacing: 8px;
                                         Text { text: "Docking Position"; color: Theme.text-primary; font-size: Theme.font-body-large; }
-                                        Text { text: "Snap the client to a specific screen corner."; color: Theme.text-muted; font-size: Theme.font-sub; }
-                                        ComboBox { model: ["None", "Top Left", "Top Right", "Bottom Left", "Bottom Right"]; current-value <=> root.docking_position; selected => { root.settings_changed(); } }
+                                        if root.is_windows : Text { text: "Snap the client to a specific screen corner."; color: Theme.text-muted; font-size: Theme.font-sub; }
+                                        if !root.is_windows : Text { text: "Snap docking is not supported on this platform."; color: Theme.warning; font-size: Theme.font-sub; }
+                                        if root.is_windows : ComboBox { model: ["None", "Top Left", "Top Right", "Bottom Left", "Bottom Right"]; current-value <=> root.docking_position; selected => { root.settings_changed(); } }
                                     }
-                                    VerticalBox {
-                                        padding: 0; spacing: 8px;
+                                    VerticalLayout {
+                                        spacing: 8px;
                                         Text { text: "Auto-Update Geo Interval (Hours) (Coming Soon)"; color: Theme.text-primary; font-size: Theme.font-body-large; }
                                         Text { text: "Set to 0 to disable auto-update."; color: Theme.text-muted; font-size: Theme.font-sub; }
                                         LineEdit { enabled: false; text <=> root.auto_update_geo; input-type: number; edited => { root.settings_changed(); } }
@@ -423,19 +451,19 @@ export component MainWindow inherits Window {
                             visible: self.opacity > 0;
                             animate opacity { duration: 150ms; }
                             viewport_height: v2ray_content.preferred-height;
-                            v2ray_content := VerticalBox {
+                            v2ray_content := VerticalLayout {
                                 padding-left: 20px; padding-right: 20px; padding-top: 20px; padding-bottom: 20px; spacing: 16px; alignment: start;
                                 Text { text: "V2Ray Core Settings"; color: Theme.text-primary; font-size: Theme.font-title; font-weight: 700; }
                                 
                                 AppSectionCard {
                                     title: "Connection Protocols";
                                     description: "Core settings for outbound connections.";
-                                    VerticalBox {
+                                    VerticalLayout {
                                         spacing: 8px;
                                         Text { text: "SOCKS Inbound Port"; color: Theme.text-primary; font-size: Theme.font-body-large; }
                                         LineEdit { text <=> root.socks_port; edited => { root.settings_changed(); } }
                                     }
-                                    VerticalBox {
+                                    VerticalLayout {
                                         spacing: 8px;
                                         Text { text: "Log Level"; color: Theme.text-primary; font-size: Theme.font-body-large; }
                                         ComboBox { model: ["debug", "info", "warning", "error", "none"]; current-value <=> root.log_level; selected => { root.settings_changed(); } }
@@ -445,11 +473,11 @@ export component MainWindow inherits Window {
                                 AppSectionCard {
                                     title: "Advanced Core Flags";
                                     description: "Tweak deep core properties. Mux enables multiplexing to reduce handshake latency. UDP must be enabled for QUIC or gaming.";
-                                    HorizontalBox { Text { text: "Mux (Multiplexing)"; color: Theme.text-primary; vertical-alignment: center; font-size: Theme.font-body-large; } Rectangle { horizontal-stretch: 1; } PremiumSwitch { checked <=> root.mux_enabled; toggled => { root.settings_changed(); } } }
-                                    HorizontalBox { Text { text: "Enable UDP"; color: Theme.text-primary; vertical-alignment: center; font-size: Theme.font-body-large; } Rectangle { horizontal-stretch: 1; } PremiumSwitch { checked <=> root.enable_udp; toggled => { root.settings_changed(); } } }
-                                    HorizontalBox { Text { text: "Allow LAN Connections"; color: Theme.text-primary; vertical-alignment: center; font-size: Theme.font-body-large; } Rectangle { horizontal-stretch: 1; } PremiumSwitch { checked <=> root.allow_lan; toggled => { root.settings_changed(); } } }
-                                    HorizontalBox { Text { text: "Enable Sniffing (Domain Override)"; color: Theme.text-primary; vertical-alignment: center; font-size: Theme.font-body-large; } Rectangle { horizontal-stretch: 1; } PremiumSwitch { checked <=> root.enable_sniffing; toggled => { root.settings_changed(); } } }
-                                    HorizontalBox { Text { text: "Enable Fragment (SNI bypassing) (Coming Soon)"; color: Theme.text-primary; vertical-alignment: center; font-size: Theme.font-body-large; } Rectangle { horizontal-stretch: 1; } PremiumSwitch { enabled: false; checked <=> root.enable_fragment; toggled => { root.settings_changed(); } } }
+                                    HorizontalLayout { Text { text: "Mux (Multiplexing)"; color: Theme.text-primary; vertical-alignment: center; font-size: Theme.font-body-large; } Rectangle { horizontal-stretch: 1; } PremiumSwitch { checked <=> root.mux_enabled; toggled => { root.settings_changed(); } } }
+                                    HorizontalLayout { Text { text: "Enable UDP"; color: Theme.text-primary; vertical-alignment: center; font-size: Theme.font-body-large; } Rectangle { horizontal-stretch: 1; } PremiumSwitch { checked <=> root.enable_udp; toggled => { root.settings_changed(); } } }
+                                    HorizontalLayout { Text { text: "Allow LAN Connections"; color: Theme.text-primary; vertical-alignment: center; font-size: Theme.font-body-large; } Rectangle { horizontal-stretch: 1; } PremiumSwitch { checked <=> root.allow_lan; toggled => { root.settings_changed(); } } }
+                                    HorizontalLayout { Text { text: "Enable Sniffing (Domain Override)"; color: Theme.text-primary; vertical-alignment: center; font-size: Theme.font-body-large; } Rectangle { horizontal-stretch: 1; } PremiumSwitch { checked <=> root.enable_sniffing; toggled => { root.settings_changed(); } } }
+                                    HorizontalLayout { Text { text: "Enable Fragment (SNI bypassing) (Coming Soon)"; color: Theme.text-primary; vertical-alignment: center; font-size: Theme.font-body-large; } Rectangle { horizontal-stretch: 1; } PremiumSwitch { enabled: false; checked <=> root.enable_fragment; toggled => { root.settings_changed(); } } }
                                 }
                             }
                         }
@@ -496,6 +524,13 @@ export component MainWindow inherits Window {
                                 title: "No Configurations Found";
                                 subtitle: "You haven't added any proxies yet. Import from clipboard, add a subscription, or manually build a config to get started.";
                                 icon: @image-url("layers.svg");
+                                
+                                HorizontalBox {
+                                    alignment: center;
+                                    spacing: 12px;
+                                    PremiumButton { text: "Import Proxy"; clicked => { root.import_proxy(""); } }
+                                    PremiumButton { text: "Add Subscription"; clicked => { root.active_settings_tab = 3; root.active_tab = 2; } }
+                                }
                             }
 
                             if root.proxy_list.length > 0: VerticalLayout {
@@ -533,7 +568,14 @@ export component MainWindow inherits Window {
                                             Text { text: item.port; width: 50px; horizontal-stretch: 0; color: Theme.text-primary; font-size: Theme.font-sub; vertical-alignment: center; }
                                             Text { text: item.transport; width: 70px; horizontal-stretch: 0; color: Theme.text-primary; font-size: Theme.font-sub; vertical-alignment: center; }
                                             Text { text: item.tls; width: 50px; horizontal-stretch: 0; color: Theme.text-primary; font-size: Theme.font-sub; vertical-alignment: center; }
-                                            Text { text: item.latency; width: 60px; horizontal-stretch: 0; color: item.latency_color; font-size: Theme.font-sub; vertical-alignment: center; font-weight: 600; }
+                                            HorizontalBox {
+                                                width: 60px;
+                                                horizontal-stretch: 0;
+                                                spacing: 4px;
+                                                if item.latency == "Ping..." : LoadingIndicator { width: 12px; height: 12px; y: (parent.height - self.height) / 2; }
+                                                if item.latency == "Ping..." : Text { text: "Ping..."; color: Theme.text-muted; font-size: Theme.font-sub; vertical-alignment: center; }
+                                                if item.latency != "Ping..." : Text { text: item.latency; color: item.latency_color; font-size: Theme.font-sub; vertical-alignment: center; font-weight: 600; }
+                                            }
                                             
                                             HorizontalBox {
                                                 width: 260px; horizontal-stretch: 0; alignment: end; spacing: 4px; padding: 3px;
@@ -560,6 +602,8 @@ export component MainWindow inherits Window {
                             
                             HorizontalBox {
                                 Text { text: "Subscriptions"; color: Theme.text-primary; font-size: Theme.font-header; font-weight: 700; vertical-alignment: center; }
+                                if root.is_updating_subs: Text { text: root.sub_update_progress; color: Theme.secondary; font-size: Theme.font-sub; vertical-alignment: center; }
+                                if root.is_updating_subs: LoadingIndicator { width: 16px; height: 16px; }
                                 Rectangle { horizontal-stretch: 1; }
                                 PremiumButton { text: root.is_updating_subs ? "Updating..." : "Update All"; enabled: !root.is_updating_subs; has_icon: true; icon: @image-url("refresh.svg"); width: 120px; clicked => { root.update_subscriptions(false); } }
                                 PremiumButton { text: "Update via Proxy"; enabled: !root.is_updating_subs; has_icon: true; icon: @image-url("globe.svg"); width: 160px; clicked => { root.update_subscriptions(true); } }
@@ -586,7 +630,6 @@ export component MainWindow inherits Window {
                                     height: 130px;
                                     Rectangle {
                                         height: 120px; y: 5px; border-radius: Theme.radius-large; background: Theme.surface-raised; border-width: 1px; border-color: Theme.border;
-                                        HorizontalLayout { padding: 12px; Rectangle { background: transparent; } }
                                         VerticalBox {
                                             padding: 14px; spacing: 8px;
                                             Text { text: item.url; color: Theme.text-primary; font-size: Theme.font-body; font-weight: 600; overflow: elide; }
@@ -610,7 +653,7 @@ export component MainWindow inherits Window {
                             visible: self.opacity > 0;
                             animate opacity { duration: 150ms; }
                             viewport_height: route_content.preferred-height;
-                            route_content := VerticalBox {
+                            route_content := VerticalLayout {
                                 padding-left: 20px; padding-right: 20px; padding-top: 20px; padding-bottom: 20px; spacing: 16px; alignment: start;
                                 Text { text: "Routing Settings"; color: Theme.text-primary; font-size: Theme.font-title; font-weight: 700; }
                                 
@@ -637,7 +680,7 @@ export component MainWindow inherits Window {
                             visible: self.opacity > 0;
                             animate opacity { duration: 150ms; }
                             viewport_height: dns_content.preferred-height;
-                            dns_content := VerticalBox {
+                            dns_content := VerticalLayout {
                                 padding-left: 20px; padding-right: 20px; padding-top: 20px; padding-bottom: 20px; spacing: 16px; alignment: start;
                                 Text { text: "DNS Settings"; color: Theme.text-primary; font-size: Theme.font-title; font-weight: 700; }
                                 
@@ -652,16 +695,16 @@ export component MainWindow inherits Window {
                                 AppSectionCard {
                                     title: "Advanced DNS Behaviours";
                                     description: "Enable FakeIP for faster domain resolution mapping, and SVCB blocking for compatibility.";
-                                    HorizontalBox { Text { text: "Add Common DNS Hosts"; color: Theme.text-primary; vertical-alignment: center; font-size: Theme.font-body-large; } Rectangle { horizontal-stretch: 1; } PremiumSwitch { checked <=> root.add_common_dns; toggled => { root.settings_changed(); } } }
-                                    HorizontalBox { Text { text: "FakeIP (Coming Soon)"; color: Theme.text-primary; vertical-alignment: center; font-size: Theme.font-body-large; } Rectangle { horizontal-stretch: 1; } PremiumSwitch { enabled: false; checked <=> root.enable_fakeip; toggled => { root.settings_changed(); } } }
-                                    HorizontalBox { Text { text: "Block SVCB and HTTPS Queries"; color: Theme.text-primary; vertical-alignment: center; font-size: Theme.font-body-large; } Rectangle { horizontal-stretch: 1; } PremiumSwitch { checked <=> root.block_svcb; toggled => { root.settings_changed(); } } }
+                                    HorizontalLayout { Text { text: "Add Common DNS Hosts"; color: Theme.text-primary; vertical-alignment: center; font-size: Theme.font-body-large; } Rectangle { horizontal-stretch: 1; } PremiumSwitch { checked <=> root.add_common_dns; toggled => { root.settings_changed(); } } }
+                                    HorizontalLayout { Text { text: "FakeIP (Coming Soon)"; color: Theme.text-primary; vertical-alignment: center; font-size: Theme.font-body-large; } Rectangle { horizontal-stretch: 1; } PremiumSwitch { enabled: false; checked <=> root.enable_fakeip; toggled => { root.settings_changed(); } } }
+                                    HorizontalLayout { Text { text: "Block SVCB and HTTPS Queries"; color: Theme.text-primary; vertical-alignment: center; font-size: Theme.font-body-large; } Rectangle { horizontal-stretch: 1; } PremiumSwitch { checked <=> root.block_svcb; toggled => { root.settings_changed(); } } }
                                 }
                                 
                                 AppSectionCard {
                                     title: "DNS Overrides";
                                     description: "Define static domain-to-IP mappings, or use a complete JSON string to override all DNS behaviors.";
-                                    VerticalBox { spacing: 8px; Text { text: "DNS Hosts (domain IP per line)"; color: Theme.text-primary; font-size: Theme.font-body-large; } Rectangle { height: 100px; border-radius: Theme.radius-medium; background: Theme.surface-raised; border-width: 1px; border-color: Theme.border; TextEdit { text <=> root.dns_hosts; edited => { root.settings_changed(); } } } }
-                                    VerticalBox { spacing: 8px; Text { text: "Custom DNS Object (JSON)"; color: Theme.text-primary; font-size: Theme.font-body-large; } Rectangle { height: 120px; border-radius: Theme.radius-medium; background: Theme.surface-raised; border-width: 1px; border-color: Theme.border; TextEdit { text <=> root.custom_dns_json; edited => { root.settings_changed(); } } } }
+                                    VerticalLayout { spacing: 8px; Text { text: "DNS Hosts (domain IP per line)"; color: Theme.text-primary; font-size: Theme.font-body-large; } Rectangle { height: 100px; border-radius: Theme.radius-medium; background: Theme.surface-raised; border-width: 1px; border-color: Theme.border; TextEdit { text <=> root.dns_hosts; edited => { root.settings_changed(); } } } }
+                                    VerticalLayout { spacing: 8px; Text { text: "Custom DNS Object (JSON)"; color: Theme.text-primary; font-size: Theme.font-body-large; } Rectangle { height: 120px; border-radius: Theme.radius-medium; background: Theme.surface-raised; border-width: 1px; border-color: Theme.border; TextEdit { text <=> root.custom_dns_json; edited => { root.settings_changed(); } } } }
                                 }
                             }
                         }
@@ -697,15 +740,18 @@ export component MainWindow inherits Window {
                                 border-color: Theme.border;
                                 
                                 Flickable {
-                                    viewport-height: log_text.preferred-height;
+                                    viewport-height: log_layout.preferred-height;
                                     width: 100%; height: 100%;
-                                    log_text := Text {
-                                        text: root.app_logs;
-                                        color: Theme.text-accent;
-                                        font-family: Theme.font-mono;
-                                        font-size: Theme.font-sub;
-                                        wrap: word-wrap;
-                                        x: 12px; y: 12px; width: parent.width - 24px;
+                                    log_layout := VerticalLayout {
+                                        padding: 12px;
+                                        width: 100%;
+                                        log_text := Text {
+                                            text: root.app_logs;
+                                            color: Theme.text-accent;
+                                            font-family: Theme.font-mono;
+                                            font-size: Theme.font-sub;
+                                            wrap: word-wrap;
+                                        }
                                     }
                                 }
                             }
@@ -713,6 +759,16 @@ export component MainWindow inherits Window {
                     }
                 }
             }
+        }
+        
+        // Error Banner overlay
+        if root.error_message != "" : ErrorBanner {
+            x: 10px;
+            y: 55px;
+            width: parent.width - 20px;
+            message: root.error_message;
+            level: root.error_level;
+            dismiss => { root.error_message = ""; }
         }
         
         // Modals Layer
@@ -727,7 +783,10 @@ export component MainWindow inherits Window {
                 Text { text: "Scan this code with a mobile client to import the proxy configuration quickly."; color: Theme.text-muted; font-size: Theme.font-body; wrap: word-wrap; }
                 Rectangle {
                     width: 240px; height: 240px; border-radius: Theme.radius-medium; background: white;
-                    Image { source: root.qr_image_data; width: 220px; height: 220px; x: 10px; y: 10px; }
+                    VerticalLayout {
+                        padding: 10px;
+                        Image { source: root.qr_image_data; }
+                    }
                 }
                 PremiumButton { text: "Done"; is_primary: true; clicked => { root.close_qr_modal(); } }
             }

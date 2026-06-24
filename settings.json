@@ -2,5 +2,26 @@
   "socks_port": 10808,
   "mux_enabled": false,
   "log_level": "warning",
-  "docking": "Top Left"
+  "docking": "Top Left",
+  "active_config_id": "ef3d4a4b-0bc2-4e11-93fe-4e922eb75685",
+  "auto_connect": false,
+  "enable_udp": true,
+  "enable_sniffing": false,
+  "sniffing_types": [
+    "http",
+    "tls"
+  ],
+  "allow_lan": false,
+  "enable_fragment": false,
+  "bypass_list": "localhost;127.*;10.*;172.16.*;172.17.*;172.18.*;172.19.*;172.20.*;172.21.*;172.22.*;172.23.*;172.24.*;172.25.*;172.26.*;172.27.*;172.28.*;172.29.*;172.30.*;172.31.*;192.168.*",
+  "start_on_boot": false,
+  "auto_update_geo": 0,
+  "domestic_dns": "8.8.8.8",
+  "remote_dns": "tcp://8.8.8.8",
+  "bootstrap_dns": "8.8.8.8",
+  "enable_fakeip": false,
+  "block_svcb": true,
+  "add_common_dns": true,
+  "dns_hosts": "",
+  "custom_dns_json": ""
 }

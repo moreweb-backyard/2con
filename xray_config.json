@@ -46,17 +46,11 @@
         ]
       },
       "streamSettings": {
-        "network": "ws",
+        "network": "httpupgrade",
         "security": "tls",
         "tlsSettings": {
           "allowInsecure": false,
           "serverName": "smart.moriw-academy.ir"
-        },
-        "wsSettings": {
-          "headers": {
-            "Host": "smart.moriw-academy.ir"
-          },
-          "path": "/"
         }
       }
     },

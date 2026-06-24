@@ -1,22 +1,5 @@
 use reqwest::{Client, Proxy};
-use std::net::{SocketAddr, TcpStream};
 use std::time::{Duration, Instant};
-
-pub fn tcp_ping(address: &str, port: u16) -> Option<u128> {
-    let target = format!("{}:{}", address, port);
-    let addr: SocketAddr = target.parse().ok().or_else(|| {
-        // Fallback for simple domain resolution
-        std::net::ToSocketAddrs::to_socket_addrs(&target)
-            .ok()?
-            .next()
-    })?;
-
-    let start = Instant::now();
-    match TcpStream::connect_timeout(&addr, Duration::from_secs(3)) {
-        Ok(_) => Some(start.elapsed().as_millis()),
-        Err(_) => None,
-    }
-}
 
 pub async fn real_delay(socks_port: u16) -> Option<u128> {
     let proxy_url = format!("socks5h://127.0.0.1:{}", socks_port);

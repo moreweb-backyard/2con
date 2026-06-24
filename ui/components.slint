@@ -34,12 +34,14 @@ export component PremiumButton inherits Rectangle {
     HorizontalLayout {
         alignment: center;
         spacing: 8px;
-        if root.has_icon: Image {
-            source: root.icon;
-            width: 16px;
-            height: 16px;
-            colorize: !root.enabled ? Theme.text-disabled : Theme.text-primary;
-            y: (parent.height - self.height) / 2;
+        if root.has_icon: VerticalLayout {
+            alignment: center;
+            Image {
+                source: root.icon;
+                width: Theme.icon-small;
+                height: Theme.icon-small;
+                colorize: !root.enabled ? Theme.text-disabled : Theme.text-primary;
+            }
         }
         Text {
             text: root.text;
@@ -149,8 +151,8 @@ export component IconButton inherits Rectangle {
         colorize: !root.enabled ? Theme.text-disabled : (
             is_danger ? Theme.danger : (is_primary ? Theme.primary : (touch.has-hover ? Theme.text-primary : Theme.text-secondary))
         );
-        width: 16px;
-        height: 16px;
+        width: Theme.icon-small;
+        height: Theme.icon-small;
         x: (parent.width - self.width) / 2;
         y: (parent.height - self.height) / 2;
         animate colorize { duration: 150ms; }
@@ -265,7 +267,7 @@ export component GlassActionCard inherits Rectangle {
         Rectangle {
             width: 44px; height: 44px; border-radius: 22px;
             background: #bf00ff22;
-            HorizontalLayout { alignment: center; VerticalLayout { alignment: center; Image { source: root.icon; colorize: Theme.secondary; width: 20px; height: 20px; } } }
+            HorizontalLayout { alignment: center; VerticalLayout { alignment: center; Image { source: root.icon; colorize: Theme.secondary; width: Theme.icon-medium; height: Theme.icon-medium; } } }
         }
 
         VerticalLayout {
@@ -419,7 +421,7 @@ export component EmptyState inherits VerticalLayout {
     Rectangle {
         width: 64px; height: 64px; border-radius: 32px;
         background: Theme.surface-raised;
-        HorizontalLayout { alignment: center; VerticalLayout { alignment: center; Image { source: root.icon; colorize: Theme.text-muted; width: 32px; height: 32px; } } }
+        HorizontalLayout { alignment: center; VerticalLayout { alignment: center; Image { source: root.icon; colorize: Theme.text-muted; width: Theme.icon-large; height: Theme.icon-large; } } }
     }
     
     VerticalLayout {
@@ -487,7 +489,7 @@ export component ModalShell inherits Rectangle {
                     width: 24px; height: 24px; border-radius: 12px;
                     background: close_touch.has-hover ? Theme.surface-hover : transparent;
                     animate background { duration: 150ms; }
-                    HorizontalLayout { alignment: center; VerticalLayout { alignment: center; Text { text: "×"; color: Theme.text-secondary; font-size: 20px; font-weight: 300; } } }
+                    HorizontalLayout { alignment: center; VerticalLayout { alignment: center; Text { text: "×"; color: Theme.text-secondary; font-size: Theme.font-header; font-weight: 300; } } }
                     close_touch := TouchArea { clicked => { root.close_clicked() } }
                 }
             }
@@ -506,5 +508,55 @@ export component AppComboBox inherits Rectangle {
         model: root.model;
         current-value <=> root.current_value;
         selected => { root.selected() }
+    }
+}
+
+export component ErrorBanner inherits Rectangle {
+    in property <string> message;
+    in property <string> level; // "error", "warning", "info"
+    callback dismiss();
+
+    height: layout.preferred-height;
+    border-radius: Theme.radius-medium;
+    background: level == "error" ? Theme.danger-bg : (level == "warning" ? #f59e0b22 : #00e5ff22);
+    border-width: 1px;
+    border-color: level == "error" ? Theme.danger : (level == "warning" ? Theme.warning : Theme.secondary);
+    
+    layout := HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 12px;
+        padding-top: 8px;
+        padding-bottom: 8px;
+        spacing: 12px;
+        alignment: space-between;
+        
+        Text {
+            text: root.message;
+            color: Theme.text-primary;
+            font-size: Theme.font-body;
+            vertical-alignment: center;
+            horizontal-stretch: 1;
+            wrap: word-wrap;
+        }
+        
+        // Close / Dismiss button
+        Rectangle {
+            width: 20px;
+            height: 20px;
+            border-radius: 10px;
+            background: touch.has-hover ? Theme.surface-hover : transparent;
+            
+            Text {
+                text: "×";
+                color: Theme.text-secondary;
+                font-size: 16px;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+            
+            touch := TouchArea {
+                clicked => { root.dismiss(); }
+            }
+        }
     }
 }

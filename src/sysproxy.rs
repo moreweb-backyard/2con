@@ -1,6 +1,10 @@
+use crate::error::AppError;
+
+#[cfg(target_os = "windows")]
 use std::process::Command;
 
-fn refresh_proxy() -> Result<(), String> {
+#[cfg(target_os = "windows")]
+fn refresh_proxy() -> Result<(), AppError> {
     let ps_script = r#"
 $code = @'
 using System;
@@ -25,17 +29,18 @@ Add-Type -TypeDefinition $code
         .arg("-Command")
         .arg(ps_script)
         .output()
-        .map_err(|e| format!("Failed to execute powershell: {}", e))?;
+        .map_err(|e| AppError::Io(format!("Failed to execute powershell: {}", e)))?;
 
     if !output.status.success() {
         let err = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("PowerShell error: {}", err));
+        return Err(AppError::Io(format!("PowerShell error: {}", err)));
     }
 
     Ok(())
 }
 
-pub fn enable_system_proxy(port: u16) -> Result<(), String> {
+#[cfg(target_os = "windows")]
+pub fn enable_system_proxy(port: u16) -> Result<(), AppError> {
     let script = format!(
         r#"
         Set-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings' -Name ProxyEnable -Value 1
@@ -50,11 +55,11 @@ pub fn enable_system_proxy(port: u16) -> Result<(), String> {
         .arg("-Command")
         .arg(&script)
         .output()
-        .map_err(|e| format!("Failed to execute powershell: {}", e))?;
+        .map_err(|e| AppError::Io(format!("Failed to execute powershell: {}", e)))?;
 
     if !output.status.success() {
         let err = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("PowerShell error: {}", err));
+        return Err(AppError::Io(format!("PowerShell error: {}", err)));
     }
 
     refresh_proxy()?;
@@ -62,7 +67,8 @@ pub fn enable_system_proxy(port: u16) -> Result<(), String> {
     Ok(())
 }
 
-pub fn disable_system_proxy() -> Result<(), String> {
+#[cfg(target_os = "windows")]
+pub fn disable_system_proxy() -> Result<(), AppError> {
     let script = r#"
     Set-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings' -Name ProxyEnable -Value 0
     "#;
@@ -72,11 +78,11 @@ pub fn disable_system_proxy() -> Result<(), String> {
         .arg("-Command")
         .arg(script)
         .output()
-        .map_err(|e| format!("Failed to execute powershell: {}", e))?;
+        .map_err(|e| AppError::Io(format!("Failed to execute powershell: {}", e)))?;
 
     if !output.status.success() {
         let err = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("PowerShell error: {}", err));
+        return Err(AppError::Io(format!("PowerShell error: {}", err)));
     }
 
     refresh_proxy()?;
@@ -84,11 +90,12 @@ pub fn disable_system_proxy() -> Result<(), String> {
     Ok(())
 }
 
-pub fn enable_auto_start() -> Result<(), String> {
+#[cfg(target_os = "windows")]
+pub fn enable_auto_start() -> Result<(), AppError> {
     let current_exe = std::env::current_exe()
-        .map_err(|e| format!("Failed to get current exe path: {}", e))?;
+        .map_err(|e| AppError::Io(format!("Failed to get current exe path: {}", e)))?;
     let exe_str = current_exe.to_str()
-        .ok_or_else(|| "Failed to convert path to string".to_string())?;
+        .ok_or_else(|| AppError::Io("Failed to convert path to string".to_string()))?;
 
     let script = format!(
         r#"Set-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name '2con_client' -Value '"{}"'"#,
@@ -100,17 +107,18 @@ pub fn enable_auto_start() -> Result<(), String> {
         .arg("-Command")
         .arg(&script)
         .output()
-        .map_err(|e| format!("Failed to execute powershell: {}", e))?;
+        .map_err(|e| AppError::Io(format!("Failed to execute powershell: {}", e)))?;
 
     if !output.status.success() {
         let err = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("PowerShell error: {}", err));
+        return Err(AppError::Io(format!("PowerShell error: {}", err)));
     }
 
     Ok(())
 }
 
-pub fn disable_auto_start() -> Result<(), String> {
+#[cfg(target_os = "windows")]
+pub fn disable_auto_start() -> Result<(), AppError> {
     let script = r#"Remove-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name '2con_client' -ErrorAction SilentlyContinue"#;
 
     let output = Command::new("powershell")
@@ -118,12 +126,33 @@ pub fn disable_auto_start() -> Result<(), String> {
         .arg("-Command")
         .arg(script)
         .output()
-        .map_err(|e| format!("Failed to execute powershell: {}", e))?;
+        .map_err(|e| AppError::Io(format!("Failed to execute powershell: {}", e)))?;
 
     if !output.status.success() {
         let err = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("PowerShell error: {}", err));
+        return Err(AppError::Io(format!("PowerShell error: {}", err)));
     }
 
     Ok(())
+}
+
+// No-op stub implementations for non-Windows platforms
+#[cfg(not(target_os = "windows"))]
+pub fn enable_system_proxy(_port: u16) -> Result<(), AppError> {
+    Err(AppError::Io("System proxy is unsupported on this platform.".to_string()))
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn disable_system_proxy() -> Result<(), AppError> {
+    Err(AppError::Io("System proxy is unsupported on this platform.".to_string()))
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn enable_auto_start() -> Result<(), AppError> {
+    Err(AppError::Io("Auto-start is unsupported on this platform.".to_string()))
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn disable_auto_start() -> Result<(), AppError> {
+    Err(AppError::Io("Auto-start is unsupported on this platform.".to_string()))
 }
