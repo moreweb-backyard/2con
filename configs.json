@@ -1,9 +1,0 @@
-[
-  {
-    "id": "ef3d4a4b-0bc2-4e11-93fe-4e922eb75685",
-    "name": "gaming\r ",
-    "protocol": "vless",
-    "raw_link": "vless://ffc0175c-880c-445c-ae10-dd592fbe1874@hcaptcha.com:443?encryption=none&security=tls&sni=smart.moriw-academy.ir&fp=chrome&alpn=http%2F1.1%2Ch2&insecure=0&allowInsecure=0&type=httpupgrade&host=smart.moriw-academy.ir&path=%2F#gaming\r ",
-    "sub_group": "Personal"
-  }
-]
